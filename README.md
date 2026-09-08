@@ -32,9 +32,9 @@ not just a number), and track that across a growing history of analyzed footage.
 
 ## Approach
 
-**Data engineering.** Every dataset used is versioned through a manifest
-(`src/incident_intel/data/manifest.py`) that checksums each clip, so any experiment can be
-traced back to exactly which frames produced it — not an ad hoc `glob` call.
+**Data engineering.** Every dataset used is versioned through a
+[manifest](src/incident_intel/data/manifest.py) that checksums each clip, so any experiment
+can be traced back to exactly which frames produced it — not an ad hoc `glob` call.
 
 **Model selection, done as a real comparison.** Before committing to a model, three candidates
 were built and evaluated on the same held-out test set, on equal footing:
@@ -65,7 +65,7 @@ statistic), not a guessed round number.
 
 - **Backend:** Python, PyTorch + torchvision, FastAPI, SQLite, OpenCV, scikit-learn
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind CSS, Three.js
-- **Testing:** pytest (24 tests, TDD throughout — see `tests/`)
+- **Testing:** pytest (24 tests, TDD throughout — see [`tests/`](tests))
 - **Dataset:** [UCSD Ped2](http://www.svcl.ucsd.edu/projects/anomaly/dataset.html), a public
   video anomaly detection benchmark
 
@@ -103,7 +103,7 @@ uvicorn incident_intel.api.main:app --reload           # http://localhost:8000
 
 To retrain and reproduce the model-selection numbers above, download
 [UCSD Ped2](http://www.svcl.ucsd.edu/projects/anomaly/UCSD_Anomaly_Dataset.tar.gz) into
-`data/raw/`, then:
+`data/raw/`, then run the [model-selection script](src/incident_intel/experiments/phase1_model_selection.py):
 
 ```bash
 python -m incident_intel.experiments.phase1_model_selection data/raw/UCSD_Anomaly_Dataset.v1p2/UCSDped2
@@ -118,10 +118,17 @@ cp .env.local.example .env.local   # point NEXT_PUBLIC_API_URL at the backend
 npm run dev                        # http://localhost:3000
 ```
 
+## Deployment
+
+The dashboard and backend deploy separately, to different kinds of host — see
+[`docs/deployment.md`](docs/deployment.md) for why the backend specifically shouldn't go on
+Vercel serverless, and what to use instead (the repo's [`Dockerfile`](Dockerfile) builds a
+portable CPU-only image for it).
+
 ## Roadmap
 
-This is Phase 1 of an 8-phase plan (full detail in
-[`docs/spec/2026-09-08-project-spec.md`](docs/spec/2026-09-08-project-spec.md)):
+This is Phase 1 of an 8-phase plan (full detail in the
+[project spec](docs/spec/2026-09-08-project-spec.md)):
 data engineering & baseline (done) → model training & experimentation → generative
 augmentation for rare anomalies → a VLM explanation layer → temporal/video modeling →
 formal training-engineering/experiment tracking → a distributed-training study →

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import tempfile
 import uuid
@@ -116,7 +117,7 @@ def create_app(
     app = FastAPI(title="Incident Intelligence API")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        allow_origins=os.environ.get("DASHBOARD_ORIGIN", "http://localhost:3000").split(","),
         allow_methods=["*"],
         allow_headers=["*"],
     )
