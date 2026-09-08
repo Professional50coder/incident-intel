@@ -1,0 +1,12 @@
+{
+  "config": {
+    "epochs": 150,
+    "scorer": "ConvAutoencoder"
+  },
+  "git_commit": "c8e152818bafbdb3863f16e0c126ac2fe6b8ea29",
+  "metrics": {
+    "auc_roc": 0.674195800910543
+  },
+  "run_id": "phase1-autoencoder",
+  "timestamp": "2026-09-08T07:37:44.111422+00:00"
+}

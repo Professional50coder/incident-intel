@@ -1,0 +1,174 @@
+{
+  "clips": [
+    {
+      "checksum": "a481a57d132c633f387437afcf58874c43ec3132f804805257427ea86ab91264",
+      "clip_id": "train/Train001",
+      "frame_count": 120,
+      "split": "train"
+    },
+    {
+      "checksum": "10756a7e9f9ba5205888d4e2d0f2eeb9d91aa6ee3a39ebe70b225896562be1fe",
+      "clip_id": "train/Train002",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "57a05e1f5833e86e8a7b0771b352ca1bfc02ed1b043c745abda9edf63a37a9f1",
+      "clip_id": "train/Train003",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "290482748b49bd1b46da5f9d09f8fb1292528c941e4f58f4e81669b11e477f3c",
+      "clip_id": "train/Train004",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "05ecf292ca619bbc60f662af9c9d1f5bc0cdc12dd38686e451631cc21a7869c4",
+      "clip_id": "train/Train005",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "c14c04aaa838d7b3cb954308b7d895da81a72b94b9e93ef0df7ba861dd6c2c4f",
+      "clip_id": "train/Train006",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "b95de7b3c5ce35476d5f8f276880899e2ce5174731323442bd87e8eb30773132",
+      "clip_id": "train/Train007",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "4438a834cb2324661e95e719df5edce930b93bf47ade5d594fe68628b79d98dc",
+      "clip_id": "train/Train008",
+      "frame_count": 120,
+      "split": "train"
+    },
+    {
+      "checksum": "02a74ed612ba4ff58a9bded04b8f8992c620626dcf4c318ffd1dd93ebade006c",
+      "clip_id": "train/Train009",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "6c1068106935ac888d5105e50f1a1c866219061127f4c282aa7f1db79fc57e78",
+      "clip_id": "train/Train010",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "f19318dab0ea0e1dbc0a9ae45cd86eed8172a4d32ab6dd0d9e05de384c5e4d21",
+      "clip_id": "train/Train011",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "5c8f09812077ae60d3a789b30970605a1b90e4346ceecbe3d4f1139240a04acf",
+      "clip_id": "train/Train012",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "b85ab23837ac48af1b07c20c7ee3368f35fef6211232129706a9d2dea6a8334a",
+      "clip_id": "train/Train013",
+      "frame_count": 180,
+      "split": "train"
+    },
+    {
+      "checksum": "761c62e1cba445b07ed1c790b4aa5bb9cf50c18811482fb898280382934a7a43",
+      "clip_id": "train/Train014",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "48b44299dc3eb1426647e08d5c053f2547244f31ea652100a6e3fb70e7935fe2",
+      "clip_id": "train/Train015",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "ed6e9f84c7490ef08457d55a5b7cd3848d24f4bb1da50d6e632679cab701697b",
+      "clip_id": "train/Train016",
+      "frame_count": 150,
+      "split": "train"
+    },
+    {
+      "checksum": "2da12e6f1925f4dd943754dc3e9f255299705d9940c5a59721b56ea1dbcc86b3",
+      "clip_id": "test/Test001",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "a36289c496501443e2239d37a22707fec9c310983ffc4b8fc860b8bf894ccacd",
+      "clip_id": "test/Test002",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "3c77785914f5d98e0ddae0faa9baeba3674a9e732a31a0f6589f2b27f01a1ee6",
+      "clip_id": "test/Test003",
+      "frame_count": 150,
+      "split": "test"
+    },
+    {
+      "checksum": "ec8e72bf6a04076c4c517fad72d4c7c1b66228b719110cde9183e722ba41a42c",
+      "clip_id": "test/Test004",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "93136581e9a6920874e78568706b04040478c47650ea21b99f15a636cd7a2f32",
+      "clip_id": "test/Test005",
+      "frame_count": 150,
+      "split": "test"
+    },
+    {
+      "checksum": "209a2f1b6c87cb66466a4520efaf21ab02a5d3dddc57afdf876b6536332c1248",
+      "clip_id": "test/Test006",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "fa684d140d6924da9a1082291b1f62fe3a0fedab6be47f8b21ea526ed2d9d951",
+      "clip_id": "test/Test007",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "3167dc2d3a4c484d938043f5feebe3fb5137ea54e9d8ff2254fc05ed81914233",
+      "clip_id": "test/Test008",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "c8259cfeb5df7b9ab7216fb3501b733e3fe2ae246beab12eeb019c4a46c7ac5f",
+      "clip_id": "test/Test009",
+      "frame_count": 120,
+      "split": "test"
+    },
+    {
+      "checksum": "32ce56bc1034f1dab383002991e0db81db30671f9863d9de06e295d80b311f2a",
+      "clip_id": "test/Test010",
+      "frame_count": 150,
+      "split": "test"
+    },
+    {
+      "checksum": "8c9c0e340cb5087f1dfc2e2e9c716e4b422b4025116b7192cef1a9613b61666e",
+      "clip_id": "test/Test011",
+      "frame_count": 180,
+      "split": "test"
+    },
+    {
+      "checksum": "090f4dc219a2180f2e28d699d8245f9adec1d508dba631c87d53792778e9ce83",
+      "clip_id": "test/Test012",
+      "frame_count": 180,
+      "split": "test"
+    }
+  ],
+  "dataset_name": "UCSDped2",
+  "version": "v1"
+}

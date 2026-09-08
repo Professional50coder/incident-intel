@@ -1,0 +1,11 @@
+{
+  "config": {
+    "scorer": "FrameDiffScorer"
+  },
+  "git_commit": "c8e152818bafbdb3863f16e0c126ac2fe6b8ea29",
+  "metrics": {
+    "auc_roc": 0.709259927566561
+  },
+  "run_id": "phase1-frame-diff",
+  "timestamp": "2026-09-08T07:29:44.435680+00:00"
+}

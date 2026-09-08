@@ -1,0 +1,13 @@
+{
+  "config": {
+    "encoder": "mobilenet_v2",
+    "k": 5,
+    "scorer": "EmbeddingKNNScorer"
+  },
+  "git_commit": "c8e152818bafbdb3863f16e0c126ac2fe6b8ea29",
+  "metrics": {
+    "auc_roc": 0.6879051959034107
+  },
+  "run_id": "phase1-embedding-knn",
+  "timestamp": "2026-09-08T07:30:11.171358+00:00"
+}
