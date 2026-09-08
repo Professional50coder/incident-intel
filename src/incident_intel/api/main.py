@@ -18,7 +18,9 @@ from incident_intel.models.autoencoder import ConvAutoencoder, load_checkpoint, 
 
 DB_PATH = Path("data/incident_intel.db")
 CHECKPOINT_PATH = Path("checkpoints/autoencoder.pt")
-ANOMALY_THRESHOLD = 0.02  # set from Task 8's Phase 1 evaluation - see docs/model-selection/phase-1.md
+ANOMALY_THRESHOLD = 0.00047  # Youden's-J optimal point on the trained autoencoder's real Ped2
+                              # test-set ROC curve (TPR ~0.38, FPR ~0.10 at this point) - see
+                              # docs/model-selection/phase-1.md for the full evaluation.
 EVERY_NTH_FRAME = 5
 
 FrameScorer = Callable[[torch.Tensor], torch.Tensor]  # (batch, 1, H, W) -> (batch,) scores
