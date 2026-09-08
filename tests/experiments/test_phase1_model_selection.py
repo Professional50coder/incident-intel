@@ -31,7 +31,7 @@ def test_run_model_selection_returns_auc_for_every_candidate(tmp_path: Path) -> 
     _build_synthetic_dataset(dataset_root)
     checkpoint_out = tmp_path / "checkpoints" / "autoencoder.pt"
 
-    results = run_model_selection(dataset_root, checkpoint_out, epochs=1)
+    results = run_model_selection(dataset_root, checkpoint_out, epochs=1, repo_root=tmp_path)
 
     assert set(results.keys()) == {"frame_diff", "embedding_knn", "autoencoder"}
     for auc in results.values():
