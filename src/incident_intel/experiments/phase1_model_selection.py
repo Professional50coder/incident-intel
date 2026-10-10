@@ -100,8 +100,16 @@ def run_model_selection(
     return results
 
 
-if __name__ == "__main__":
-    import sys
+def _main(argv: list[str] | None = None) -> None:
+    import argparse
 
-    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/raw/UCSDped2")
-    run_model_selection(root, Path("checkpoints/autoencoder.pt"))
+    parser = argparse.ArgumentParser(description="Run the Phase 1 model-selection comparison on UCSD Ped2.")
+    parser.add_argument("dataset_root", nargs="?", default="data/raw/UCSDped2", type=Path)
+    parser.add_argument("--epochs", type=int, default=20, help="autoencoder epochs (the served checkpoint used 150)")
+    parser.add_argument("--checkpoint-out", type=Path, default=Path("checkpoints/autoencoder.pt"))
+    args = parser.parse_args(argv)
+    run_model_selection(args.dataset_root, args.checkpoint_out, epochs=args.epochs)
+
+
+if __name__ == "__main__":
+    _main()

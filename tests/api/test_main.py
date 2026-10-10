@@ -127,3 +127,12 @@ def test_stats_aggregate_across_incidents(tmp_path: Path) -> None:
     assert body["anomalous_incident_count"] == 1
     assert body["anomaly_rate"] == 1.0
     assert body["average_max_score"] == 0.5
+
+
+def test_analyze_rejects_unreadable_video_with_400(tmp_path: Path) -> None:
+    app = create_app(scorer_factory=lambda: _constant_score_scorer(0.5), db_path=tmp_path / "test.db")
+    client = TestClient(app)
+
+    response = client.post("/analyze", files={"file": ("bad.mp4", b"not a video", "video/mp4")})
+
+    assert response.status_code == 400
