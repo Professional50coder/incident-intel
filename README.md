@@ -1,133 +1,119 @@
 # Incident Intelligence
 
-Video anomaly detection, built end to end: a versioned data pipeline, a real model-selection
-comparison across three candidate approaches, a trained PyTorch model, an evaluation against
-published benchmarks, a served FastAPI backend, and a Next.js + Three.js dashboard. Not a
-notebook. A running system.
+Video anomaly detection on fixed-camera footage, built end to end and benchmarked honestly: three candidate models compared on UCSD Ped2, a trained PyTorch autoencoder served through FastAPI, and a Next.js + Three.js dashboard.
 
-| | |
+![python](https://img.shields.io/badge/python-3.10%2B-blue) ![pytorch](https://img.shields.io/badge/PyTorch-CPU%20inference-ee4c2c) ![fastapi](https://img.shields.io/badge/FastAPI-backend-009688) ![next](https://img.shields.io/badge/Next.js-Three.js%20dashboard-black) ![license](https://img.shields.io/badge/license-MIT-green)
+
+## The problem and the outcome
+
+Anomalies in surveillance-style video are rare and rarely labeled, so the system learns what "normal" looks like from normal-only footage and scores how far each frame departs from it. The interesting question is which model to build on, so that choice is measured rather than assumed.
+
+**Outcome (frame-level AUC-ROC, UCSD Ped2 official test set, 64x64 grayscale):**
+
+| Candidate | AUC-ROC |
 |---|---|
-| **Source** | [github.com/Professional50coder/incident-intel](https://github.com/Professional50coder/incident-intel) |
-| **Live demo** | None yet. No public deployment exists; see [Deploying](#deploying). |
-| **Model-selection write-up** | [`docs/model-selection/phase-1.md`](docs/model-selection/phase-1.md) |
-| **Project spec (8 phases)** | [`docs/spec/2026-09-08-project-spec.md`](docs/spec/2026-09-08-project-spec.md) |
-| **Deployment guide** | [`docs/deployment.md`](docs/deployment.md) |
-| **Dataset** | [UCSD Ped2](http://www.svcl.ucsd.edu/projects/anomaly/dataset.html) |
+| Frame-diff baseline (no learning) | **0.7093** |
+| MobileNetV2 embedding k-NN (frozen) | 0.6879 |
+| Conv autoencoder, 150 epochs (served) | 0.6742 |
+| Conv autoencoder, 20 epochs | 0.6451 |
 
-**At a glance**
+These are well below the ~90-95% that the literature reports on Ped2; see [Limitations](#limitations). The simplest baseline wins today, and the autoencoder is served anyway for reasons written down in [Why the autoencoder](#why-the-autoencoder-despite-a-lower-score).
 
-- Upload a video clip; the API samples every 5th frame, scores each one with a trained
-  convolutional autoencoder, and stores the result as an incident in SQLite.
-- Three candidates were compared on the same UCSD Ped2 test set before anything was served.
-  Every number is recorded in [`runs/`](runs) with the git commit that produced it.
-- The dashboard shows KPI tiles, a live incident feed, and a 3D per-frame score timeline.
+## Quickstart
 
-## Contents
+```bash
+git clone https://github.com/Professional50coder/incident-intel && cd incident-intel
+python -m venv venv && source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt && pip install -e .
+uvicorn incident_intel.api.main:app --reload            # http://localhost:8000/docs
+```
 
-1. [The problem we solve](#the-problem-we-solve)
-2. [Why we built it](#why-we-built-it)
-3. [What it does](#what-it-does)
-4. [Use cases](#use-cases)
-5. [Product tour](#product-tour)
-6. [How it works](#how-it-works)
-7. [Architecture](#architecture)
-8. [Models and why](#models-and-why)
-9. [Design decisions](#design-decisions)
-10. [Feature matrix](#feature-matrix)
-11. [Trust, security and limits](#trust-security-and-limits)
-12. [Where it stands](#where-it-stands)
-13. [Tech stack](#tech-stack)
-14. [Repository layout](#repository-layout)
-15. [Running locally](#running-locally)
-16. [Testing](#testing)
-17. [Deploying](#deploying)
-18. [Roadmap](#roadmap)
+The trained checkpoint (`checkpoints/autoencoder.pt`, 190 KB) is committed, so the API works straight after clone. Tests: `pytest` (25 tests, no dataset or checkpoint needed). Dashboard: `cd dashboard && npm install && cp .env.local.example .env.local && npm run dev`.
 
-## The problem we solve
+## Worked example
 
-Given a video clip from a fixed camera (a walkway, a production line, a storefront), flag
-which frames look anomalous, show *why* (a live 3D score timeline, not just a number), and
-track that across a growing history of analyzed footage.
+```bash
+curl -F "file=@clip.avi" http://localhost:8000/analyze
+```
 
-Anomalies are rare and rarely labeled. The system therefore learns what "normal" looks like
-from normal-only footage and scores how far each new frame departs from it.
+I ran this against a synthetic 30-frame, 360x240 video of flat grey noise (a scene the model has never seen):
 
-## Why we built it
+```json
+{"incident_id": "...", "created_at": "...", "source_filename": "demo.avi",
+ "frame_scores": [{"frame_index": 0, "score": 0.00074, "is_anomalous": true}, ...6 frames...],
+ "max_score": 0.00074}
+```
 
-The project is a portfolio-grade demonstration of the full ML lifecycle: data, training,
-evaluation, serving and UI as one product. It was scoped to real constraints from the start:
-one local machine with an NVIDIA RTX 3050 Laptop GPU (4GB VRAM), no rented compute, public
-benchmark data only, and no fabricated numbers. Where a later technique does not fit that
-hardware, the spec says it gets scoped down and documented, not skipped or faked.
+Six frames came back (every 5th of 30), each scored by reconstruction error and compared with `ANOMALY_THRESHOLD = 0.00047`. All six were flagged. That is the expected behavior for footage far from Ped2 and it illustrates the domain limit: scores are only meaningful for the scene the model was trained on.
 
-## What it does
+## Reproduce the model comparison
 
-| Capability | Problem it removes |
-|---|---|
-| Checksummed dataset [manifest](src/incident_intel/data/manifest.py) per dataset version | Experiments that cannot be traced back to the exact frames that produced them |
-| Three-way model comparison on equal footing | Committing to a model before knowing what simpler baselines achieve |
-| Local JSON run log (git commit, config, metrics) in [`runs/`](runs) | Results that live only in a terminal or a third-party tracking service |
-| `POST /analyze` video scoring | Manually stepping through footage to find unusual frames |
-| SQLite incident history with `/incidents` and `/stats` | Losing results between sessions; no aggregate view |
-| Threshold set from the real ROC curve (Youden's J) | A guessed, round-number cut-off |
-| 3D score timeline in the dashboard | A single score that hides where in the clip the spike happened |
+```bash
+# download UCSD Ped2 (http://www.svcl.ucsd.edu/projects/anomaly/dataset.html) into data/raw/
+python -m incident_intel.experiments.phase1_model_selection \
+    data/raw/UCSD_Anomaly_Dataset.v1p2/UCSDped2 --epochs 150
+```
 
-## Use cases
+This rebuilds the checksummed manifest ([`data/manifests/ucsdped2-v1.json`](data/manifests/ucsdped2-v1.json)), runs all three candidates, writes one JSON per candidate to [`runs/`](runs) (git commit, config, metric) and overwrites `checkpoints/autoencoder.pt`. The default is `--epochs 20`; the served checkpoint used 150. The k-NN candidate downloads MobileNetV2 weights through torchvision.
 
-- **Fixed-camera review.** Score a clip from a walkway, production line or storefront and jump
-  to the frames that exceed the threshold.
-- **Footage triage over time.** Keep a running history of analyzed clips and watch the anomaly
-  rate and average max score across them.
-- **ML lifecycle reference.** Read the code and docs as a worked example of manifest-versioned
-  data, honest model selection, and a model wired into a real API and UI.
+Provenance of the numbers: `runs/phase1-frame-diff.json` (0.7093), `runs/phase1-embedding-knn.json` (0.6879), `runs/phase1-autoencoder.json` (0.6742, 150 epochs). The 20-epoch figure (0.6451) comes from the write-up in [`docs/model-selection/phase-1.md`](docs/model-selection/phase-1.md); its run file was not kept. The dataset is not in the repo, so these numbers are the recorded ones and were not regenerated for this README; the test suite (25 tests) was run and passes.
 
-The served checkpoint is trained only on UCSD Ped2 (a pedestrian walkway). Other scenes need
-their own normal-only training footage; see [limits](#trust-security-and-limits).
+## Model selection
 
-## Product tour
+| Candidate | How it scores | Learnable? | AUC-ROC |
+|---|---|---|---|
+| Frame-diff | mean absolute pixel distance from the mean normal frame | no | 0.7093 |
+| Embedding k-NN | mean distance to the 5 nearest normal-frame MobileNetV2 embeddings | no (frozen encoder) | 0.6879 |
+| Conv autoencoder | mean squared reconstruction error | yes | 0.6742 (150 ep), 0.6451 (20 ep) |
 
-The dashboard ([`dashboard/src/app/page.tsx`](dashboard/src/app/page.tsx)) is a single page:
+All three are fit on normal training frames only and scored on the same test frames, using [`compute_auc_roc`](src/incident_intel/eval/metrics.py) (scikit-learn). The autoencoder has three stride-2 conv layers (1 to 16 to 32 to 64 channels), a mirrored transposed-conv decoder with a sigmoid, and trains with Adam (lr 1e-3, batch 32, MSE).
 
-- **KPI tiles.** Incidents analyzed, frames processed, anomaly rate, average max score.
-- **Analyze footage.** Drop or select a video (mp4, avi, mov). The panel shows "running
-  inference" until the API responds.
-- **Recent incidents.** A live list, polled every 5 seconds, with filename, time, frames
-  sampled, and an anomaly / normal badge. Click one to load its timeline.
-- **Score timeline.** A Three.js scene: one bar per sampled frame. Height encodes the score;
-  red marks frames above the threshold, cyan marks normal ones. Orbit controls, slow
-  auto-rotate.
-- If the backend is unreachable, a banner asks whether it is running at `NEXT_PUBLIC_API_URL`.
+### Why the autoencoder despite a lower score
 
-No screenshots are checked in yet.
+- Frame-diff has no parameters, so training ablations, synthetic-anomaly augmentation and temporal modeling (roadmap phases 2, 3, 5) cannot build on it.
+- The gap is 0.035 AUC (0.709 vs 0.674), modest rather than decisive.
+- The reconstruction-error map is a natural source for a per-region evidence view that frame-diff would need extra work to match.
 
-## How it works
+Full reasoning: [`docs/model-selection/phase-1.md`](docs/model-selection/phase-1.md).
 
-One upload, end to end:
+### Operating threshold
+
+`ANOMALY_THRESHOLD = 0.00047` was chosen as the Youden's-J point on the autoencoder's ROC curve over the Ped2 test set, at roughly TPR 0.38 and FPR 0.10 (figures from the write-up, not re-derived here). The threshold is tuned on the same data it is reported on.
+
+## Limitations
+
+- **Accuracy is modest.** AUC 0.674 for the served model; at the threshold about 38% of anomalous frames are caught and about 10% of normal frames flagged. A flag is a signal, not a verdict.
+- **Resolution.** Frames are downsampled to 64x64 grayscale (from Ped2's 240x360) to fit a 4 GB laptop GPU. This is a likely contributor to the gap with published results, though no ablation here isolates it.
+- **No motion.** Every candidate scores single frames independently, while Ped2 anomalies (bikes, carts) are defined by motion. A temporal model is planned, not built.
+- **Selection and reporting share data.** Ped2 has only 12 test clips, so model choice, threshold and reported AUC all use the same test set. Numbers are optimistic for unseen data.
+- **Single run**, no seeds or confidence intervals recorded.
+- **Single scene.** The checkpoint has only seen the Ped2 walkway; other scenes need their own normal-only training footage.
+- **Security.** No authentication, no upload size limit (the upload is read into memory), CORS limited to `DASHBOARD_ORIGIN`. Only filenames and scores are stored, not video. Run it on a trusted network.
+
+## Dashboard
+
+[`dashboard/src/app/page.tsx`](dashboard/src/app/page.tsx) is a single page: KPI tiles (incidents, frames, anomaly rate, average max score), an upload panel (mp4, avi, mov), a recent-incident list polled every 5 seconds, and a Three.js timeline with one bar per sampled frame (red above threshold, cyan below). No screenshots are checked in yet. A banner appears if the backend is unreachable at `NEXT_PUBLIC_API_URL`.
+
+## How a request flows
 
 1. The dashboard posts the file as multipart form data to `POST /analyze`.
-2. The API writes the upload to a temporary file and opens it with OpenCV.
-3. Every 5th frame (`EVERY_NTH_FRAME = 5`) is converted to grayscale, resized to 64x64
-   (`FRAME_SIZE` in [`config.py`](src/incident_intel/config.py)) and scaled to `[0, 1]`.
-   The temporary file is deleted.
-4. If no frames could be read, the API returns `400`.
-5. Each frame goes through the autoencoder. The score is the mean squared reconstruction error.
-   The checkpoint (`checkpoints/autoencoder.pt`) is loaded lazily on the first request, on CPU.
-6. A frame is flagged when its score exceeds `ANOMALY_THRESHOLD = 0.00047`.
-7. The result (incident id, UTC timestamp, filename, per-frame scores, max score) is stored as
-   JSON in the `incidents` table and returned.
-8. The dashboard renders the timeline and refreshes the KPI tiles and incident list.
+2. The API writes it to a temporary file and opens it with OpenCV.
+3. Every 5th frame (`EVERY_NTH_FRAME`) is converted to grayscale, resized to 64x64 (`FRAME_SIZE` in [`config.py`](src/incident_intel/config.py)) and scaled to [0, 1]. The temporary file is deleted. No readable frames gives a `400`.
+4. The autoencoder (loaded lazily from `checkpoints/autoencoder.pt`, on CPU) scores each frame by reconstruction error; frames above the threshold are flagged.
+5. The result is stored as JSON in the SQLite `incidents` table and returned.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
     U[Video upload] --> D[Next.js + Three.js dashboard]
-    D -- "POST /analyze" --> A[FastAPI backend]
+    D - "POST /analyze" --> A[FastAPI backend]
     A --> S["Frame sampling<br/>OpenCV, every 5th frame, 64x64 grayscale"]
     S --> M["Anomaly scorer<br/>trained conv autoencoder, reconstruction error"]
     M --> T{"score > 0.00047?"}
     T --> DB[("SQLite<br/>data/incident_intel.db")]
-    D -- "GET /incidents, /incidents/{id}, /stats<br/>polled every 5s" --> A
+    D - "GET /incidents, /incidents/{id}, /stats<br/>polled every 5s" --> A
     A --> DB
 
     subgraph Offline [Offline: model selection]
@@ -166,121 +152,36 @@ flowchart TD
 **Data.** One SQLite table, `incidents (id, created_at, source_filename, result_json)`.
 Created on first connection.
 
-## Models and why
-
-Three candidates were built and evaluated on the same held-out test set, on equal footing:
-
-| Candidate | How it scores | AUC-ROC |
-|---|---|---|
-| Frame-diff threshold (non-learned) | Mean absolute pixel distance from the mean normal frame | **0.709** |
-| Pretrained-embedding k-NN (frozen MobileNetV2) | Mean distance to the 5 nearest normal-frame embeddings | 0.688 |
-| Convolutional autoencoder (trained, 20 epochs) | Mean squared reconstruction error | 0.6451 |
-| Convolutional autoencoder (trained, 150 epochs; served) | Mean squared reconstruction error | 0.674 |
-
-Raw values are in [`runs/`](runs): `phase1-frame-diff.json` (0.7093),
-`phase1-embedding-knn.json` (0.6879), `phase1-autoencoder.json` (0.6742, 150 epochs).
-
-**The autoencoder** has three stride-2 conv layers (1 → 16 → 32 → 64 channels) and a mirrored
-transposed-conv decoder ending in a sigmoid. It is trained with Adam (lr 1e-3, batch 32, MSE)
-on normal frames only.
-
-**Why the autoencoder is served despite scoring lower.** The full write-up is in
-[`docs/model-selection/phase-1.md`](docs/model-selection/phase-1.md). Short version: it is the
-only candidate with learnable capacity, which every later phase (training ablations,
-synthetic-data augmentation, temporal modeling) builds on. A frame-diff threshold has nowhere
-left to go. The gap is modest, not a rout. The reconstruction error is also the natural source
-for a future per-region "evidence" view.
-
-**Honest results, not inflated ones.** These AUC numbers sit below the ~90-95% the anomaly
-detection literature reports on this benchmark. That gap is explained, not hidden:
-
-- Frames are downsampled to 64x64 grayscale (from Ped2's native 240x360) to fit comfortably in
-  4GB of VRAM.
-- Every candidate scores single frames independently. No motion information crosses frame
-  boundaries, which is a real structural limit for a benchmark whose anomalies (cyclists,
-  carts) are defined by motion.
-- More epochs helped the autoencoder but plateaued short of the frame-diff baseline.
-
-Closing that gap with a temporal model is a planned later phase, not a hidden problem.
-
-**Evaluation threshold** is set from the trained model's actual ROC curve (Youden's J
-statistic), not a guessed round number: `0.00047`, at a true positive rate of about 0.38 and a
-false positive rate of about 0.10 on the Ped2 test set.
-
 ## Design decisions
 
 | Decision | Why | Trade-off |
 |---|---|---|
-| Serve the autoencoder, not the top-scoring frame-diff baseline | Only candidate with learnable capacity for later phases | Gives up about 0.035 AUC today |
-| 64x64 grayscale frames | Training fits comfortably in 4GB VRAM | Loses small-object detail; part of the gap to published results |
-| Evaluate on the full official Ped2 test set | Ped2 has only 12 test clips; matches how the literature reports | Model selection and reporting reuse the same data; documented as a limitation |
-| Checksummed manifest per dataset version | Any run is traceable to exact frames | One extra step on every dataset change |
-| Local JSON runs, no MLflow or W&B | No telemetry shipped to a third-party cloud | No built-in experiment UI yet (planned, Phase 6) |
-| `create_app()` with injectable scorer and DB path | Tests run without a trained checkpoint on disk | Slightly more wiring than a module-level app |
-| Lazy checkpoint load | The module imports cleanly before a checkpoint exists | First `/analyze` call pays the load cost |
-| CPU-only Docker image for serving | Inference on a small model needs no GPU; image is smaller and portable | Retraining needs a separate GPU setup |
-| Backend off Vercel serverless | Package size, cold starts, ephemeral filesystem, execution limits | Two deploy targets instead of one |
-| Plain `three`, no react-three-fiber | Small dependency footprint for a simple scene | More manual setup and cleanup code |
-| Checkpoint committed to the repo | Small enough (about 190 KB); the API works after clone | Binary in git history |
-
-## Feature matrix
-
-| Feature | Status |
-|---|---|
-| Versioned, checksummed dataset manifest | Built |
-| Frame-diff, embedding k-NN and autoencoder candidates | Built |
-| Local run logging with git commit | Built |
-| Trained autoencoder checkpoint | Built |
-| FastAPI `/analyze`, `/incidents`, `/incidents/{id}`, `/stats` | Built |
-| SQLite incident history | Built |
-| Dashboard: KPI tiles, upload, live feed, 3D score timeline | Built |
-| CPU-only Dockerfile for the backend | Built |
-| Flagged-frame gallery and per-region evidence view | Planned (spec, Phase 1 frontend) |
-| Architecture ablations | Planned (Phase 2) |
-| Synthetic anomaly augmentation | Planned (Phase 3) |
-| Plain-language explanations (VLM) | Planned (Phase 4) |
-| Temporal model | Planned (Phase 5) |
-| Experiments view in the dashboard | Planned (Phase 6) |
-| DDP-correct training loop | Planned (Phase 7) |
-| Docker Compose and Postgres | Planned (Phase 8) |
-
-## Trust, security and limits
-
-- **No authentication.** Any client that can reach the API can upload video and read all
-  incidents. Run it on a trusted network or behind your own auth.
-- **CORS** allows only `DASHBOARD_ORIGIN` (comma-separated; defaults to
-  `http://localhost:3000`).
-- **No upload size limit** in the API. The whole upload is read into memory, then written to a
-  temporary file that is deleted after frame sampling.
-- **Stored data.** Only filenames and scores are persisted, not the video.
-- **Accuracy.** Frame-level AUC-ROC is 0.674 on Ped2. At the operating threshold, roughly 38%
-  of anomalous frames are caught and about 10% of normal frames are flagged. Do not treat a
-  flag as a verdict.
-- **Domain.** The model has only seen the Ped2 walkway. Scores on other scenes are not
-  calibrated.
-- **Per-frame only.** Motion-defined anomalies are a known blind spot until Phase 5.
-- **Evaluation reuse.** Ped2's 12 test clips are used for both model selection and reporting.
-- **No telemetry.** Experiment tracking is local JSON; no external tracking service.
-
-## Where it stands
-
-This is Phase 1 of 8. Its accuracy is below published Ped2 baselines (~90-95% AUC-ROC), and the
-README says so. What it does differently from a typical anomaly-detection notebook:
-
-- **A product, not a notebook.** Data, model, API, storage and UI run together.
-- **Traceable.** Every number cites a dataset manifest and a git commit.
-- **Honest selection.** The baselines are reported even where they beat the served model, with
-  the reasoning written down.
-- **Constraint-aware.** Built and documented for a single 4GB GPU.
+| Serve the autoencoder, not the top-scoring frame-diff | Only candidate with learnable capacity for later phases | Gives up 0.035 AUC today |
+| 64x64 grayscale | Trains within 4 GB VRAM | Loses small-object detail |
+| Evaluate on the full official Ped2 test set | Only 12 test clips; matches how the literature reports | Selection and reporting reuse the same data |
+| Checksummed manifest per dataset version | Any run traces to exact frames | One extra step per dataset change |
+| Local JSON run logs, no MLflow or W&B | No third-party telemetry | No experiment UI yet |
+| `create_app()` with injectable scorer and DB path | Tests need no checkpoint | Slightly more wiring |
+| CPU-only Docker image | Small model, no GPU needed to serve | Retraining needs a separate GPU setup |
+| Backend off Vercel serverless | Package size, cold starts, ephemeral disk | Two deploy targets |
+| Checkpoint committed (190 KB) | API works after clone | Binary in git history (force-added past a `checkpoints/*` ignore rule) |
 
 ## Tech stack
 
-- **Backend:** Python (3.10+), PyTorch + torchvision, FastAPI, SQLite, OpenCV, scikit-learn
-- **Frontend:** Next.js (App Router), TypeScript, Tailwind CSS, Three.js
-- **Testing:** pytest (24 tests, TDD throughout; see [`tests/`](tests)), httpx
-- **Packaging:** setuptools (`pyproject.toml`), Docker (`python:3.11-slim`, CPU-only PyTorch)
-- **Dataset:** [UCSD Ped2](http://www.svcl.ucsd.edu/projects/anomaly/dataset.html), a public
-  video anomaly detection benchmark
+| Layer | Tools |
+|---|---|
+| Models | PyTorch, torchvision (MobileNetV2), scikit-learn |
+| Backend | FastAPI, OpenCV (headless), SQLite |
+| Frontend | Next.js (App Router), TypeScript, Tailwind, Three.js |
+| Tests / CI | pytest, httpx, GitHub Actions ([`ci.yml`](.github/workflows/ci.yml): backend tests and dashboard lint) |
+| Packaging | setuptools, Docker (`python:3.11-slim`, CPU PyTorch) |
+| Data | [UCSD Ped2](http://www.svcl.ucsd.edu/projects/anomaly/dataset.html) |
+
+Configuration: see [`.env.example`](.env.example) (`DASHBOARD_ORIGIN`).
+
+## Testing
+
+`pytest` runs 25 tests across 8 files mirroring `src/` (API, manifest, Ped2 loader, metrics, autoencoder, baselines, run logger, selection pipeline). API tests inject a constant scorer and a temporary database, so no dataset or checkpoint is needed. The full suite took about 3 minutes on a CPU-only Windows machine. The dashboard has a lint script and no tests.
 
 ## Repository layout
 
@@ -306,72 +207,6 @@ checkpoints/     trained model weights (small enough to check in)
 .paul/           project milestones and current state
 Dockerfile       CPU-only backend image
 ```
-
-## Running locally
-
-**Backend**
-
-```bash
-python -m venv venv && source venv/bin/activate      # or venv\Scripts\activate on Windows
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements.txt
-pip install -e .
-pytest                                                 # 24 tests
-uvicorn incident_intel.api.main:app --reload           # http://localhost:8000
-```
-
-The `cu124` index installs the CUDA build used for training. For inference only, the CPU build
-(`https://download.pytorch.org/whl/cpu`, as the Dockerfile uses) is enough.
-
-**Reproducing model selection.** Download
-[UCSD Ped2](http://www.svcl.ucsd.edu/projects/anomaly/UCSD_Anomaly_Dataset.tar.gz) into
-`data/raw/`, then run the [model-selection script](src/incident_intel/experiments/phase1_model_selection.py):
-
-```bash
-python -m incident_intel.experiments.phase1_model_selection data/raw/UCSD_Anomaly_Dataset.v1p2/UCSDped2
-```
-
-Notes:
-
-- The script rewrites `data/manifests/ucsdped2-v1.json`, `runs/phase1-*.json` and
-  `checkpoints/autoencoder.pt`.
-- The command-line entry point uses the default `epochs=20`. The served checkpoint was trained
-  for 150 epochs (see `runs/phase1-autoencoder.json`); call
-  `run_model_selection(..., epochs=150)` to reproduce it.
-- The embedding k-NN candidate downloads pretrained MobileNetV2 weights through torchvision.
-
-**Dashboard**
-
-```bash
-cd dashboard
-npm install
-cp .env.local.example .env.local   # point NEXT_PUBLIC_API_URL at the backend
-npm run dev                        # http://localhost:3000
-```
-
-`NEXT_PUBLIC_API_URL` defaults to `http://localhost:8000`.
-
-## Testing
-
-```bash
-pytest
-```
-
-24 tests across 8 files, mirroring `src/`:
-
-| File | Tests | Covers |
-|---|---|---|
-| `tests/api/test_main.py` | 6 | Every-5th-frame sampling, incident retrieval, 404s, newest-first listing, stats |
-| `tests/data/test_manifest.py` | 3 | Manifest building and checksums |
-| `tests/data/test_ped2_dataset.py` | 3 | Frame loading and mask-derived labels |
-| `tests/eval/test_metrics.py` | 3 | AUC-ROC, including the single-class error |
-| `tests/models/test_autoencoder.py` | 3 | Shapes, reconstruction error, checkpoint round trip |
-| `tests/models/test_baselines.py` | 3 | Frame-diff and k-NN scorers |
-| `tests/runs/test_run_logger.py` | 2 | Run JSON output |
-| `tests/experiments/test_phase1_model_selection.py` | 1 | The selection pipeline, isolated from the real `runs/` directory |
-
-API tests inject a constant scorer and a temporary database through `create_app()`, so they
-need no trained checkpoint. The dashboard has a lint script (`npm run lint`) and no test suite.
 
 ## Deploying
 
@@ -417,3 +252,7 @@ of the same running product, not a disconnected notebook.
 | 6 | Formal training engineering and experiment tracking, with a local experiments view | Planned |
 | 7 | A distributed-training study: DDP-correct loop verified on CPU processes | Planned |
 | 8 | Productionization: Docker Compose, Postgres, UI polish, demo walkthrough | Planned |
+
+## License
+
+MIT, see [LICENSE](LICENSE).
