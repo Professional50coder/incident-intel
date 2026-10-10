@@ -21,7 +21,7 @@ that reuse is a known limitation of model-selecting on a small benchmark — not
 |---|---|
 | Frame-diff threshold | **0.7093** |
 | Embedding k-NN | 0.6879 |
-| Convolutional autoencoder (20 epochs) | 0.6451 |
+| Convolutional autoencoder (20 epochs) | 0.6451 (no run file kept: the 150-epoch run reuses the same run id) |
 | Convolutional autoencoder (150 epochs, checkpoint served by the API) | 0.6742 |
 
 Published Ped2 baselines for comparison: reconstruction-based methods in the literature
@@ -36,7 +36,7 @@ gap is worth being explicit about rather than glossing over:
   boundaries. Ped2's anomalies are defined by motion, not single-frame appearance, so this is
   a structural ceiling on the approach, not a tuning problem. That's exactly why Phase 5
   (temporal/video modeling) exists in the roadmap.
-- More autoencoder training epochs helped (0.6451 → 0.6688 going from 20 to 150 epochs) but
+- More autoencoder training epochs helped (0.6451 → 0.6742 going from 20 to 150 epochs) but
   plateaued well short of beating the frame-diff baseline — a real, negative-ish result, not
   hidden or re-run until it looked better.
 
@@ -50,7 +50,7 @@ in this round. The reasoning is about what each candidate can become, not just t
   ablations), Phase 3 (training on synthetic augmented anomalies), or Phase 5 (temporal
   modeling) that builds on it. Committing to it now would be a dead end for the rest of the
   roadmap.
-- The AUC gap (0.709 vs 0.669) is modest, not a rout — this isn't overriding a clearly better
+- The AUC gap (0.709 vs 0.674) is modest, not a rout — this isn't overriding a clearly better
   option, it's choosing the option with headroom over the option that's already maxed out.
 - The autoencoder's reconstruction-error map is also the natural source of the dashboard's
   "evidence" view (which pixels/regions drove the score), which the frame-diff scorer would

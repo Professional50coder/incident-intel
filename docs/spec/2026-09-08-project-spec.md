@@ -13,9 +13,6 @@ Purpose: demonstrate the full ML lifecycle for GenPeach-style research-engineeri
   training) is normally done at a scale that doesn't fit, the phase is *not skipped* — it's
   scoped down honestly and the write-up says so explicitly. No fabricated numbers.
 - Pace: a few hours a week. Phases are sized to finish in 2-3 weekends each, not months.
-- Nothing about the *build process itself* touches Claude's cloud tooling (no Artifacts, no
-  uploads/exports) — that's a constraint on how this conversation works, not on the product's
-  own architecture.
 - No proprietary data. Public, well-documented benchmark datasets only.
 
 ## Domain & dataset
