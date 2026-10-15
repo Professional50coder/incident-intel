@@ -7,3 +7,4 @@ data/*.db
 checkpoints/*
 !checkpoints/.gitkeep
 *.egg-info/
+.paul/
