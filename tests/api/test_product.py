@@ -94,3 +94,28 @@ def test_samples_list_analyze_and_unknown(tmp_path):
     assert c.post("/samples/..%2Fetc/analyze").status_code == 404
     assert c.post("/samples/missing/analyze").status_code == 404
     assert _client(tmp_path / "x", samples_dir=tmp_path / "none").get("/samples").json() == []
+
+
+def test_rate_limit_returns_429_with_retry_after(tmp_path):
+    c = _client(tmp_path, rate_limit_per_min=2)
+    for _ in range(2):
+        assert c.post("/analyze", files={"file": ("a.txt", b"x", "text/plain")}).status_code == 415
+    r = c.post("/analyze", files={"file": ("a.txt", b"x", "text/plain")})
+    assert r.status_code == 429 and int(r.headers["retry-after"]) >= 1
+    assert "Too many" in r.json()["detail"]
+    # other clients (different forwarded address) are unaffected; cheap endpoints are not limited
+    assert c.post("/analyze", files={"file": ("a.txt", b"x", "text/plain")}, headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 415
+    assert c.get("/health").status_code == 200
+
+
+def test_report_has_ranked_segments_and_plain_summary(tmp_path):
+    v = tmp_path / "a.mp4"
+    _video(v)
+    c = _client(tmp_path)
+    r = c.post("/analyze?mode=budget", files={"file": ("a.mp4", v.read_bytes(), "video/mp4")}).json()
+    rep = c.get(f"/incidents/{r['incident_id']}/report").json()
+    seg = rep["segments"][0]
+    assert seg["rank"] == 1 and seg["confidence"] in {"low", "medium", "high"}
+    assert "Start with the one at" in rep["summary"]["headline"]
+    assert any("unverified" in n for n in rep["summary"]["uncertainty"])
+    assert "## Summary" in c.get(f"/incidents/{r['incident_id']}/report?format=md").text

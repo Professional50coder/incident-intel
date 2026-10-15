@@ -4,16 +4,18 @@ import os
 import re
 import sqlite3
 import tempfile
+import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional
 
 import cv2
 import torch
-from fastapi import FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
 from incident_intel import analysis
@@ -30,6 +32,7 @@ ANOMALY_THRESHOLD = analysis.ABSOLUTE_THRESHOLD
 EVERY_NTH_FRAME = 5
 
 MAX_UPLOAD_MB = float(os.environ.get("MAX_UPLOAD_MB", "30"))
+RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "20"))  # analyses per client IP per minute
 MAX_RAW_FRAMES = int(os.environ.get("MAX_RAW_FRAMES", "6000"))  # decoded frames cap per upload
 ALLOWED_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
@@ -161,6 +164,7 @@ def create_app(
     db_path: Path = DB_PATH,
     samples_dir: Optional[Path] = None,
     max_upload_mb: Optional[float] = None,
+    rate_limit_per_min: Optional[int] = None,
 ) -> FastAPI:
     """Builds the API with an injectable scorer/db path, so tests don't need a trained
     checkpoint on disk."""
@@ -172,6 +176,34 @@ def create_app(
         allow_headers=["*"],
     )
     scorer = scorer_factory()
+    rate_limit = RATE_LIMIT_PER_MIN if rate_limit_per_min is None else rate_limit_per_min
+    hits: dict[str, deque] = defaultdict(deque)
+
+    @app.middleware("http")
+    async def limit_analyses(request: Request, call_next):
+        # Only the expensive endpoints are limited. Behind a proxy the first X-Forwarded-For
+        # entry is the caller; in-memory, so it resets on restart and is per process.
+        path = request.url.path
+        if rate_limit > 0 and request.method == "POST" and (path == "/analyze" or path.endswith("/analyze")):
+            fwd = request.headers.get("x-forwarded-for", "")
+            ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+            now = time.monotonic()
+            q = hits[ip]
+            while q and now - q[0] > 60:
+                q.popleft()
+            if len(q) >= rate_limit:
+                retry = max(1, int(60 - (now - q[0])))
+                return JSONResponse(
+                    {"detail": f"Too many analyses from your address. Try again in about {retry} seconds."},
+                    status_code=429,
+                    headers={"Retry-After": str(retry)},
+                )
+            q.append(now)
+            if len(hits) > 5000:  # bound memory
+                for k in [k for k, v in hits.items() if not v]:
+                    del hits[k]
+        return await call_next(request)
+
     samples_path = samples_dir if samples_dir is not None else SAMPLES_DIR
     limit_bytes = int((max_upload_mb if max_upload_mb is not None else MAX_UPLOAD_MB) * 1024 * 1024)
 
@@ -237,6 +269,7 @@ def create_app(
             "default_budget": analysis.DEFAULT_BUDGET,
             "every_nth_frame": EVERY_NTH_FRAME,
             "max_raw_frames": MAX_RAW_FRAMES,
+            "rate_limit_per_min": rate_limit,
         }
 
     @app.post("/analyze", response_model=IncidentResult)

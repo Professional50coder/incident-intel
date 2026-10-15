@@ -35,6 +35,9 @@ class Segment:
     peak_z: float
     peak_time_s: float
     explanation: str = ""
+    confidence: str = "low"  # low / medium / high: how far above this clip's normal, and for how long
+    rank: int = 0  # 1 = review first
+    duration_s: float = 0.0
 
 
 def _scale(x: np.ndarray) -> float:
@@ -114,9 +117,22 @@ def segment_events(
             peak_z=float(z[peak]),
             peak_time_s=float(times_s[peak]),
         )
+        seg.duration_s = seg.end_s - seg.start_s
+        seg.confidence = confidence_for(seg.peak_z, hi - lo + 1)
         seg.explanation = explain(seg)
         segments.append(seg)
+    for rank, seg in enumerate(sorted(segments, key=lambda g: (-g.peak_z, g.start_s)), 1):
+        seg.rank = rank
     return segments
+
+
+def confidence_for(peak_z: float, n_samples: int) -> str:
+    """Heuristic label, not a calibrated probability: strong AND sustained deviations rank higher."""
+    if peak_z >= 10 and n_samples >= 2:
+        return "high"
+    if peak_z >= 7 or (peak_z >= 5 and n_samples >= 2):
+        return "medium"
+    return "low"
 
 
 def fmt_time(seconds: float) -> str:
@@ -126,11 +142,16 @@ def fmt_time(seconds: float) -> str:
 
 def explain(seg: Segment) -> str:
     strength = "strongly" if seg.peak_z >= 8 else "clearly" if seg.peak_z >= 4 else "moderately"
+    why = {
+        "high": "Strong and lasting departure, so worth checking first, though still not proof of an incident.",
+        "medium": "Clear departure, but short or modest. Worth a look.",
+        "low": "Weak or brief departure. Could easily be noise; check only if you have time.",
+    }[seg.confidence]
     return (
         f"From {fmt_time(seg.start_s)} to {fmt_time(seg.end_s)} the scene looked {strength} "
         f"unlike the rest of this clip to the model (peak at {fmt_time(seg.peak_time_s)}). "
         "That can be a person or vehicle moving unusually, a crowd or lighting change, or "
-        "camera movement; the model cannot say which. Watch this segment to decide."
+        "camera movement; the model cannot say which. " + why
     )
 
 
@@ -147,12 +168,46 @@ def domain_warning(scores: Sequence[float], absolute_threshold: float = ABSOLUTE
     return None
 
 
+def summarize(segments: Sequence[dict], duration_s: float | None, warning: str | None, mode: str) -> dict:
+    """Plain-language clip summary and a suggested review order. Honest about uncertainty."""
+    notes = []
+    if warning:
+        notes.append("This clip looks different from the scene the model was trained on, so scores are less reliable than usual.")
+    if mode == "absolute":
+        notes.append("Ped2-calibrated mode is only trustworthy for the UCSD Ped2 walkway.")
+    notes.append("Flags are unverified: the model has about 0.67 AUC on its benchmark and cannot name what it saw.")
+    if not segments:
+        return {
+            "headline": "Nothing stood out in this clip at the current settings.",
+            "review_order": [],
+            "uncertainty": notes,
+        }
+    ranked = sorted(segments, key=lambda g: g["rank"])
+    first = ranked[0]
+    n = len(segments)
+    headline = (
+        f"{n} segment{'s' if n != 1 else ''} worth reviewing"
+        + (f" in {fmt_time(duration_s)} of video" if duration_s else "")
+        + f". Start with the one at {fmt_time(first['start_s'])} ({first['confidence']} confidence)."
+    )
+    return {
+        "headline": headline,
+        "review_order": [
+            {"rank": g["rank"], "start_s": g["start_s"], "end_s": g["end_s"], "confidence": g["confidence"]}
+            for g in ranked
+        ],
+        "uncertainty": notes,
+    }
+
+
 def build_report(result: dict, mode: str, threshold: float, budget: float, min_z: float = DEFAULT_MIN_Z) -> dict:
     scores = [fs["score"] for fs in result["frame_scores"]]
     times = [fs.get("time_s", float(fs["frame_index"])) for fs in result["frame_scores"]]
     period = result.get("sample_period_s") or (times[1] - times[0] if len(times) > 1 else 1.0)
     flags, eff = flag_frames(scores, mode, threshold, budget, min_z)
     segs = segment_events(scores, times, flags, period)
+    seg_dicts = [asdict(g) for g in segs]
+    warning = domain_warning(scores)
     return {
         "incident_id": result["incident_id"],
         "source_filename": result["source_filename"],
@@ -168,8 +223,9 @@ def build_report(result: dict, mode: str, threshold: float, budget: float, min_z
             "effective_threshold": eff,
         },
         "flagged_frames": int(sum(flags)),
-        "segments": [asdict(s) for s in segs],
-        "warning": domain_warning(scores),
+        "segments": seg_dicts,
+        "warning": warning,
+        "summary": summarize(seg_dicts, result.get("duration_s"), warning, mode),
         "frames": [
             {"time_s": t, "score": s, "z": float(z), "flagged": f}
             for t, s, z, f in zip(times, scores, robust_z(scores), flags)
@@ -211,19 +267,26 @@ def report_markdown(report: dict) -> str:
         lines += ["> Only the first part of the video was analysed (length limit).", ""]
     if report.get("warning"):
         lines += [f"> **Warning:** {report['warning']}", ""]
+    sm = report["summary"]
+    lines += ["## Summary", "", sm["headline"], ""]
+    lines += [f"- Note: {n}" for n in sm["uncertainty"]] + [""]
     lines += ["## Flagged segments", ""]
     if not report["segments"]:
         lines += ["No segments were flagged at these settings.", ""]
     else:
-        lines += ["| # | Start | End | Peak score | Peak vs clip baseline |", "|---|---|---|---|---|"]
-        for i, s in enumerate(report["segments"], 1):
+        lines += [
+            "| Review order | Start | End | Confidence | Peak score | Peak vs clip baseline |",
+            "|---|---|---|---|---|---|",
+        ]
+        by_rank = sorted(report["segments"], key=lambda g: g["rank"])
+        for s in by_rank:
             lines.append(
-                f"| {i} | {fmt_time(s['start_s'])} | {fmt_time(s['end_s'])} | "
+                f"| {s['rank']} | {fmt_time(s['start_s'])} | {fmt_time(s['end_s'])} | {s['confidence']} | "
                 f"{s['peak_score']:.6g} | {s['peak_z']:.1f} sigma |"
             )
         lines.append("")
-        for i, s in enumerate(report["segments"], 1):
-            lines += [f"**Segment {i}.** {s['explanation']}", ""]
+        for s in by_rank:
+            lines += [f"**Segment {s['rank']}.** {s['explanation']}", ""]
     lines += [
         "## Reviewer sign-off",
         "",

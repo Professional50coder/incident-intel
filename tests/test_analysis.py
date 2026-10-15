@@ -73,3 +73,21 @@ def test_reports_render_all_formats():
 def test_empty_report_says_nothing_flagged():
     rep = analysis.build_report(_result([1.0] * 10), "budget", 0.00047, 0.05)
     assert "No segments were flagged" in analysis.report_markdown(rep)
+
+
+def test_ranking_orders_by_strength_and_confidence_labels():
+    scores = [1.0] * 40
+    scores[5] = 12.0  # single weak-ish spike
+    scores[25], scores[26] = 60.0, 55.0  # strong and sustained
+    rep = analysis.build_report(_result(scores), "budget", 0.00047, 0.2)
+    by_rank = sorted(rep["segments"], key=lambda g: g["rank"])
+    assert by_rank[0]["start_s"] == 25.0 and by_rank[0]["confidence"] == "high"
+    assert analysis.confidence_for(5.5, 1) == "low"
+    assert analysis.confidence_for(8, 1) == "medium"
+
+
+def test_summary_flags_uncertainty_and_handles_empty():
+    empty = analysis.summarize([], 10.0, None, "budget")
+    assert "Nothing stood out" in empty["headline"] and empty["review_order"] == []
+    warned = analysis.summarize([], 10.0, "domain", "absolute")
+    assert any("different from the scene" in n for n in warned["uncertainty"])
