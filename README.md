@@ -25,7 +25,7 @@ Or with Python 3.10+:
 
 ```bash
 git clone https://github.com/Professional50coder/incident-intel && cd incident-intel
-python -m venv venv && source venv/bin/activate        # Windows: venv\Scriptsctivate
+python -m venv venv && source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt && pip install -e .
 uvicorn incident_intel.api.main:app                     # http://localhost:8000
