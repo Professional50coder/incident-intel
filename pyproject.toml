@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 where = ["src"]
 
 [tool.setuptools.package-data]
-incident_intel = ["api/static/*.html"]
+incident_intel = ["api/static/*.html", "api/static/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

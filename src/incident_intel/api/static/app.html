@@ -3,12 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Incident Intelligence</title>
+<title>Analyse a clip - Incident Intelligence</title>
+<meta name="description" content="Upload a fixed-camera clip and get a ranked list of unusual moments to review, with an exportable report.">
+<meta name="robots" content="noindex">
 <style>
 :root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5b6573;--line:#dde1e7;--accent:#1d5fd1;--bad:#c62828;--onacc:#fff;--ok:#2e7d32;--warn:#8a5a00;--warnbg:#fff4d6}
 @media (prefers-color-scheme:dark){:root{--onacc:#0b1220;--bg:#0f1318;--card:#171c23;--ink:#e8ebf0;--mute:#9aa4b2;--line:#2a313b;--accent:#6ea0ff;--bad:#ff7b72;--ok:#6fcf7a;--warn:#f0c060;--warnbg:#3a2f12}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--accent)}
 main{max-width:1000px;margin:0 auto;padding:16px}
 h1{font-size:1.7rem;margin:8px 0}h2{font-size:1.1rem;margin:0 0 8px}
 .lead{color:var(--mute);max-width:60ch}
@@ -38,6 +41,9 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px;bord
 label{font-size:.9rem;color:var(--mute)}
 .hist li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
 .hist{list-style:none;margin:0;padding:0}
+.badge{display:inline-block;padding:1px 8px;border-radius:99px;font-size:.78rem;font-weight:600;border:1px solid var(--line);margin-left:6px}.badge.high{color:var(--bad);border-color:var(--bad)}.badge.medium{color:var(--warn);border-color:var(--warn)}
+.summary{margin:12px 0}
+@media (max-width:600px){main{padding:12px}h1{font-size:1.4rem}.card{padding:12px}button,.btn{padding:10px 14px}}
 footer{color:var(--mute);font-size:.85rem;margin:24px 0}
 [hidden]{display:none!important}
 @media print{.noprint{display:none!important}body{background:#fff;color:#000}.card{border:0}}
@@ -46,14 +52,15 @@ footer{color:var(--mute);font-size:.85rem;margin:24px 0}
 <body>
 <main>
 <header>
-  <h1>Incident Intelligence</h1>
-  <p class="lead">Find the unusual moments in fixed-camera video. Upload a clip (or try a sample), get a score for every moment, a short list of segments worth watching, and a report you can export. Everything is unsupervised: the model learned what a normal walkway looks like, and flags what departs from it.</p>
+  <nav class="row" aria-label="Site" style="justify-content:space-between"><a href="/" style="color:var(--ink);font-weight:600;text-decoration:none">Incident Intelligence</a><a href="/#faq">Help and FAQ</a></nav>
+  <h1>Analyse a clip</h1>
+  <p class="lead">Pick a sample to see how it works, or upload your own fixed-camera clip. You get the most unusual moments ranked for review, and a report you can export.</p>
 </header>
 
 <section class="card noprint" id="start">
-  <h2>1. Pick a sample clip or upload your own</h2>
+  <h2>Start here: pick a sample clip</h2>
   <div class="samples" id="samples"><p class="lead">Loading samples...</p></div>
-  <p style="margin:14px 0 6px"><b>Or upload a video</b> <span class="lead" id="limits"></span></p>
+  <p style="margin:14px 0 6px"><b>Or upload your own video</b> <span class="lead" id="limits"></span></p>
   <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a video file to upload">
     Drop a video here or <u>choose a file</u>
     <input type="file" id="file" accept="video/*,.mp4,.avi,.mov,.mkv,.webm" hidden>
@@ -75,12 +82,13 @@ footer{color:var(--mute);font-size:.85rem;margin:24px 0}
         <button id="share">Copy report link</button>
       </div>
     </div>
+    <div id="summary" class="summary"><p id="headline" style="font-size:1.1rem;font-weight:600;margin:0 0 6px"></p><ul id="notes" class="lead" style="margin:0 0 8px;padding-left:18px"></ul></div>
     <div id="warn" class="banner warn" hidden></div>
     <div id="trunc" class="banner warn" hidden>Only the first part of this video was analysed (length limit).</div>
     <div class="kpis" id="kpis"></div>
     <video id="player" controls preload="metadata" hidden></video>
     <h2 style="margin-top:14px">Anomaly timeline</h2>
-    <svg id="chart" viewBox="0 0 900 220" role="img" aria-label="Anomaly score over time"></svg>
+    <svg id="chart" viewBox="0 0 900 220" role="img" aria-label="Anomaly score over time; flagged moments are listed in the segments section below"></svg>
     <p class="lead" style="margin:4px 0">Higher = less like the rest of the footage. Red marks are flagged moments; click the chart to jump the video there.</p>
     <div class="row noprint" style="margin-top:10px">
       <label>Flagging
@@ -94,7 +102,7 @@ footer{color:var(--mute);font-size:.85rem;margin:24px 0}
     <p class="lead" id="modeHelp"></p>
   </div>
   <div class="card">
-    <h2>Flagged segments to review</h2>
+    <h2>Segments to review, most likely first</h2>
     <div id="segs"></div>
   </div>
 </section>
@@ -204,6 +212,7 @@ function render() {
   $("modeHelp").textContent = st.mode === "budget"
     ? "Flags at most about " + Math.round(st.budget * 100) + "% of this clip's frames, and only moments clearly above its own normal level. Use the slider to trade missed events for fewer false alarms."
     : "Flags every frame above " + cfg.absolute_threshold + ", the point picked on the Ped2 test set. Only trustworthy for the Ped2 walkway; on other scenes it tends to flag nearly everything.";
+  $("headline").textContent = R.summary.headline; const nl = $("notes"); nl.textContent = ""; R.summary.uncertainty.forEach(t => { const li = document.createElement("li"); li.textContent = t; nl.append(li); });
   const w = $("warn"); w.textContent = R.warning || ""; w.hidden = !R.warning;
   $("trunc").hidden = !R.truncated;
   const k = $("kpis"); k.textContent = "";
@@ -226,11 +235,11 @@ function chart() {
   report.segments.forEach(s => { h += '<rect x="' + X(s.start_s) + '" y="' + T + '" width="' + Math.max(3, X(s.end_s) - X(s.start_s)) + '" height="' + (Ht - T - B) + '" fill="#c62828" opacity=".18"/>'; });
   h += '<line x1="' + L + '" y1="' + (Ht - B) + '" x2="' + W + '" y2="' + (Ht - B) + '" stroke="currentColor" opacity=".3"/>';
   const eff = report.settings.effective_threshold;
-  if (eff < smax) h += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(eff) + '" y2="' + Y(eff) + '" stroke="#c62828" stroke-dasharray="5 4"/><text x="' + (L + 4) + '" y="' + (Y(eff) - 4) + '" font-size="11" fill="#c62828">flag threshold</text>';
+  if (eff < smax) h += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(eff) + '" y2="' + Y(eff) + '" stroke="#c62828" stroke-dasharray="5 4"/><text x="' + (L + 4) + '" y="' + (Y(eff) - 4) + '" font-size="20" fill="#c62828">flag threshold</text>';
   h += '<polyline fill="none" stroke="#1d5fd1" stroke-width="1.6" points="' + F.map(f => X(f.time_s).toFixed(1) + "," + Y(f.score).toFixed(1)).join(" ") + '"/>';
   F.forEach(f => { if (f.flagged) h += '<circle cx="' + X(f.time_s) + '" cy="' + Y(f.score) + '" r="3.5" fill="#c62828"/>'; });
-  const n = 6; for (let i = 0; i <= n; i++) { const t = tmax * i / n; h += '<text x="' + X(t) + '" y="' + (Ht - 6) + '" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">' + fmt(t) + "</text>"; }
-  h += '<text x="4" y="' + (T + 10) + '" font-size="11" fill="currentColor" opacity=".7">' + smax.toExponential(1) + "</text>";
+  const n = 6; for (let i = 0; i <= n; i++) { const t = tmax * i / n; h += '<text x="' + X(t) + '" y="' + (Ht - 6) + '" font-size="20" text-anchor="middle" fill="currentColor" opacity=".7">' + fmt(t) + "</text>"; }
+  h += '<text x="4" y="' + (T + 10) + '" font-size="20" fill="currentColor" opacity=".7">' + smax.toExponential(1) + "</text>";
   svg.innerHTML = h;
   svg.onclick = e => { const r = svg.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * W; const t = Math.max(0, Math.min(tmax, (x - L) / (W - L - 8) * tmax)); seek(t); };
 }
@@ -239,11 +248,14 @@ function verdicts() { try { return JSON.parse(localStorage.getItem("ii_v_" + cur
 function setVerdict(i, val) { const v = verdicts(); v[i] = val; try { localStorage.setItem("ii_v_" + cur, JSON.stringify(v)); } catch (e) {} segments(); }
 function segments() {
   const box = $("segs"); box.textContent = "";
-  if (!report.segments.length) { box.textContent = "Nothing stood out at these settings. If you expected an event, raise the alert budget with the slider above."; return; }
+  if (!report.segments.length) { box.textContent = "Nothing stood out at these settings. If you expected an event, raise the alert budget with the slider above, or switch to clip-relative flagging."; return; }
   const vd = verdicts();
-  report.segments.forEach((s, i) => {
+  [...report.segments].sort((a, b) => a.rank - b.rank).forEach(s => {
+    const i = s.rank;
     const d = document.createElement("div"); d.className = "seg";
-    const t = document.createElement("b"); t.textContent = "Segment " + (i + 1) + ": " + fmt(s.start_s) + " to " + fmt(s.end_s) + "  (peak " + s.peak_z.toFixed(1) + " sigma above this clip's normal)";
+    const t = document.createElement("b"); t.textContent = (s.rank === 1 ? "Review first: " : "#" + s.rank + ": ") + fmt(s.start_s) + " to " + fmt(s.end_s);
+    const bd = document.createElement("span"); bd.className = "badge " + s.confidence; bd.textContent = s.confidence + " confidence";
+    t.append(bd);
     const p = document.createElement("div"); p.className = "why"; p.textContent = s.explanation;
     const row = document.createElement("div"); row.className = "row noprint";
     const j = document.createElement("button"); j.textContent = "Watch"; j.onclick = () => seek(s.start_s); j.disabled = $("player").hidden;
@@ -273,7 +285,7 @@ function reflag() { clearTimeout(tm); tm = setTimeout(async () => { if (!cur) re
 $("mode").onchange = reflag;
 $("budget").oninput = () => { $("budgetVal").textContent = $("budget").value + "% of frames"; reflag(); };
 $("print").onclick = () => window.print();
-$("share").onclick = async () => { const u = location.origin + "/#/r/" + cur; try { await navigator.clipboard.writeText(u); $("share").textContent = "Link copied"; } catch (e) { prompt("Copy this link", u); } };
+$("share").onclick = async () => { const u = location.origin + "/app#/r/" + cur; try { await navigator.clipboard.writeText(u); $("share").textContent = "Link copied"; } catch (e) { prompt("Copy this link", u); } };
 const drop = $("drop");
 drop.onclick = () => $("file").click();
 drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } };

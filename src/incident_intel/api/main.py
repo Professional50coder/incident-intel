@@ -16,6 +16,7 @@ import torch
 from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from incident_intel import analysis
@@ -431,8 +432,18 @@ def create_app(
         )
 
     @app.get("/", include_in_schema=False)
-    async def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+    async def landing() -> FileResponse:
+        return FileResponse(STATIC_DIR / "landing.html")
+
+    @app.get("/app", include_in_schema=False)
+    async def analysis_app() -> FileResponse:
+        return FileResponse(STATIC_DIR / "app.html")
+
+    @app.get("/robots.txt", include_in_schema=False)
+    async def robots() -> PlainTextResponse:
+        return PlainTextResponse("User-agent: *\nAllow: /\nDisallow: /app\n")
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     return app
 

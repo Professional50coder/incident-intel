@@ -29,7 +29,10 @@ def _client(tmp_path: Path, **kw) -> TestClient:
 
 def test_index_and_health_and_config(tmp_path):
     c = _client(tmp_path)
-    assert "Incident Intelligence" in c.get("/").text
+    assert "Try a sample" in c.get("/").text
+    assert "Analyse a clip" in c.get("/app").text
+    assert c.get("/static/og.png").status_code == 200
+    assert c.get("/robots.txt").status_code == 200
     assert c.get("/health").json()["status"] == "ok"
     cfg = c.get("/config").json()
     assert ".mp4" in cfg["allowed_extensions"] and cfg["max_upload_mb"] > 0
