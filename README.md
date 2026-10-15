@@ -8,7 +8,7 @@ Triage tool for fixed-camera video: upload a clip, get a score for every moment,
 
 ## What it is for, and what it is not
 
-It narrows hours of footage from one fixed camera to a handful of "most unusual moments" you can watch, confirm or dismiss, and export. Its edge is the workflow around the model: a false-alarm budget instead of a magic threshold, event segments instead of frame scores, a review loop, and reports. See [`docs/market-research.md`](docs/market-research.md) for the prior-art scan behind that positioning.
+It narrows hours of footage from one fixed camera to a handful of "most unusual moments" you can watch, confirm or dismiss, and export. Its edge is the workflow around the model: a false-alarm budget instead of a magic threshold, event segments instead of frame scores, a review loop, and reports. See [`docs/market-research.md`](docs/market-research.md) for the prior-art scan behind that positioning and [`docs/design-notes.md`](docs/design-notes.md) for the UI patterns applied (design tokens and components live in `src/incident_intel/api/static/ds.css`).
 
 It is **not** a certified security product. The model is weak-to-moderate (frame-level AUC 0.674 on Ped2, below published results of roughly 90%) and was trained on one scene. A flag means "this moment looks unlike the rest of the clip", never "an incident happened". See [Limitations](#limitations).
 

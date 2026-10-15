@@ -4,74 +4,101 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Incident Intelligence - find the unusual moments in fixed-camera video</title>
-<meta name="description" content="Upload a clip from a fixed camera and get a short, ranked list of unusual moments to review, with plain-language explanations and an exportable report. Open source, with honest limits.">
-<link rel="canonical" href="/">
+<meta name="description" content="Upload a clip from a fixed camera and get a short, ranked list of unusual moments to review, with plain-language reasons and an exportable report. Open source, with honest limits.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Incident Intelligence">
 <meta property="og:description" content="Turn fixed-camera footage into a ranked review list of unusual moments, plus an exportable report.">
 <meta property="og:image" content="/static/og.png">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/static/ds.css">
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#4f5967;--line:#dde1e7;--accent:#1d5fd1;--onacc:#fff;--warnbg:#fff4d6;--warn:#6b4500}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--ink:#e8ebf0;--mute:#a3adba;--line:#2a313b;--accent:#6ea0ff;--onacc:#0b1220;--warnbg:#3a2f12;--warn:#f0c060}}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-a{color:var(--accent)}
-.skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;background:var(--card);padding:8px;z-index:9}
-.wrap{max-width:960px;margin:0 auto;padding:0 20px}
-nav{display:flex;justify-content:space-between;align-items:center;padding:16px 0;gap:12px;flex-wrap:wrap}
-nav b{font-size:1.05rem}nav div a{margin-left:16px}
-.hero{padding:40px 0 28px}
-h1{font-size:clamp(1.9rem,5vw,3rem);line-height:1.15;margin:0 0 14px;max-width:18ch}
-h2{font-size:1.5rem;margin:0 0 12px}
-.lead{color:var(--mute);max-width:60ch;font-size:1.08rem}
-.cta{display:inline-block;background:var(--accent);color:var(--onacc);padding:14px 26px;border-radius:10px;font-weight:700;text-decoration:none;margin:10px 12px 10px 0}
-.cta.alt{background:transparent;color:var(--accent);border:2px solid var(--accent);padding:12px 24px}
-a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
-section{padding:28px 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
-.card h3{margin:0 0 6px;font-size:1.1rem}.card p{margin:0;color:var(--mute)}
-.num{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--onacc);font-weight:700;margin-bottom:8px}
-img.shot{width:100%;height:auto;border:1px solid var(--line);border-radius:12px}
-pre{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto;font-size:.85rem;line-height:1.45;white-space:pre-wrap}
-.lim li{margin:6px 0}
-.note{background:var(--warnbg);color:var(--warn);padding:12px 14px;border-radius:10px}
-details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:10px 0}
-summary{cursor:pointer;font-weight:600}details p{color:var(--mute);margin:8px 0 0}
-footer{padding:28px 0 48px;color:var(--mute);font-size:.92rem;border-top:1px solid var(--line);margin-top:24px}
+.hero{padding:var(--s8) 0 var(--s6);text-align:center}
+.hero h1{font-size:var(--t-hero);max-width:18ch;margin:0 auto var(--s4)}
+.hero p.lead{font-size:var(--t-lg);color:var(--ink-2);max-width:56ch;margin:0 auto var(--s5)}
+.eyebrow{display:inline-flex;margin-bottom:var(--s4)}
+.window{margin:var(--s6) auto 0;max-width:900px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;text-align:left}
+.window .bar{display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2);align-items:center}
+.window .bar i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.window .bar span{margin-left:12px;font-size:var(--t-xs);color:var(--ink-2)}
+.window .body{padding:var(--s5)}
+.chart{width:100%;height:auto;display:block}
+.proof{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s4);padding:var(--s6) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:var(--s7) 0}
+.proof b{display:block;font-size:var(--t-lg)}.proof span{font-size:var(--t-sm);color:var(--ink-2)}
+section.block{padding:var(--s7) 0}
+.kicker{font-size:var(--t-xs);font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--brand);margin-bottom:var(--s2)}
+h2.big{font-size:var(--t-2xl);max-width:20ch;margin-bottom:var(--s4)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:var(--s7);align-items:center;margin:var(--s7) 0}
+.split.flip .text{order:2}
+@media (max-width:820px){.split{grid-template-columns:1fr;gap:var(--s5)}.split.flip .text{order:0}}
+.split h3{font-size:var(--t-xl);margin-bottom:var(--s3)}
+.num{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--brand);color:var(--brand-ink);font-weight:700;margin-bottom:var(--s3)}
+.seg{border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4);background:var(--surface)}
+pre{max-height:380px;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4);overflow:auto;font-size:.82rem;line-height:1.5;white-space:pre-wrap}
+.slider-mock{display:grid;gap:var(--s3)}
+.slider-mock .track{height:6px;border-radius:99px;background:var(--line);position:relative}
+.slider-mock .track i{position:absolute;left:0;top:0;height:6px;width:25%;background:var(--brand);border-radius:99px}
+.slider-mock .track b{position:absolute;left:25%;top:-7px;width:20px;height:20px;border-radius:50%;background:var(--brand);margin-left:-10px;box-shadow:0 0 0 4px var(--brand-soft)}
+details{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);margin:var(--s3) 0}
+summary{cursor:pointer;font-weight:600;min-height:32px}details p{color:var(--ink-2);margin:var(--s2) 0 0}
+.cta-final{text-align:center;padding:var(--s8) var(--s4);background:var(--brand-soft);border-radius:var(--r-lg);margin:var(--s7) 0}
+.cta-final h2{font-size:var(--t-2xl);max-width:18ch;margin:0 auto var(--s4)}
+footer{padding:var(--s6) 0 var(--s7);color:var(--ink-2);font-size:var(--t-sm)}
+footer .row{justify-content:space-between}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="wrap">
-<nav aria-label="Main">
-  <b>Incident Intelligence</b>
-  <div><a href="#how">How it works</a><a href="#faq">FAQ</a><a href="https://github.com/Professional50coder/incident-intel">GitHub</a><a href="/app">Open the app</a></div>
-</nav>
-<main id="main">
-<section class="hero">
-  <h1>Find the unusual moments in fixed-camera video.</h1>
-  <p class="lead">Upload a clip and get a short, ranked list of moments worth watching, each with a plain-language reason, plus a report you can export. No account, no setup.</p>
-  <a class="cta" href="/app">Try a sample</a><a class="cta alt" href="#example">See an example result</a>
-  <p class="lead" style="font-size:.95rem">Open source. A research-grade model with honest limits: it flags moments that look unusual, it does not confirm incidents.</p>
-</section>
+<header class="pillnav">
+  <a class="brand" href="/"><i aria-hidden="true"></i>Incident Intelligence</a>
+  <nav aria-label="Main">
+    <a class="hide-sm" href="#features">Features</a><a class="hide-sm" href="#how">How it works</a><a class="hide-sm" href="#faq">FAQ</a><a class="hide-sm" href="https://github.com/Professional50coder/incident-intel">GitHub</a>
+    <button class="icon-btn" id="theme" aria-label="Toggle light or dark theme" title="Theme">&#9680;</button>
+    <a class="btn btn-primary btn-sm" href="/app">Try a sample</a>
+  </nav>
+</header>
 
-<section id="how" aria-labelledby="how-h">
-  <h2 id="how-h">How it works</h2>
-  <div class="grid">
-    <div class="card"><span class="num" aria-hidden="true">1</span><h3>Pick or upload a clip</h3><p>Start with a bundled sample, or drop in your own video (mp4, avi, mov, mkv or webm, up to 30 MB).</p></div>
-    <div class="card"><span class="num" aria-hidden="true">2</span><h3>Review the ranked moments</h3><p>See a timeline and a list ordered most-likely first, each with a confidence label. Click to jump the video there, then confirm it or mark a false alarm.</p></div>
-    <div class="card"><span class="num" aria-hidden="true">3</span><h3>Tune and export</h3><p>Use one slider to trade missed events against false alarms. Export JSON, CSV or Markdown, print to PDF, or share a report link.</p></div>
+<main id="main" class="container">
+<section class="hero">
+  <span class="badge badge-brand eyebrow">Open source &middot; no account needed</span>
+  <h1>Watch the <span class="serif-i">five minutes</span> that matter.</h1>
+  <p class="lead">Upload a clip from a fixed camera. Get a short, ranked list of unusual moments, each with a plain-language reason, plus a report you can share.</p>
+  <div class="row" style="justify-content:center"><a class="btn btn-primary" href="/app">Try a sample</a><a class="btn" href="#example">See a real result</a></div>
+
+  <div class="window reveal" aria-label="Example of the analysis screen">
+    <div class="bar"><i></i><i></i><i></i><span>cart_crossing.mp4 &middot; bundled synthetic sample</span></div>
+    <div class="body">
+      <p style="margin:0 0 var(--s2);font-weight:700">1 segment worth reviewing in 0:20.0 of video. Start with the one at 0:09.6 (high confidence).</p>
+      <svg class="chart" id="hero-chart" viewBox="0 0 900 200" role="img" aria-label="Anomaly score over time for the sample clip, with one flagged peak near ten seconds"></svg>
+    </div>
   </div>
 </section>
 
-<section id="example" aria-labelledby="ex-h">
-  <h2 id="ex-h">A real example</h2>
-  <p class="lead">This is the actual output for the bundled <em>cart crossing</em> sample, a synthetic clip in which a wide object crosses the walkway at about 0:09 to 0:11. The sample is made-up footage for demonstration, not real surveillance video.</p>
-  <img class="shot" src="/static/example.png" width="1000" height="1100" loading="lazy" alt="Screenshot of the analysis result: a timeline with one flagged peak and a ranked segment list.">
-  <p class="lead">The exported Markdown report begins like this:</p>
-  <pre># Incident report: cart_crossing.mp4
+<div class="proof reveal" aria-label="Verifiable facts about the project">
+  <div><b>MIT licensed</b><span>Source on GitHub, read it before you trust it</span></div>
+  <div><b>Tested on every commit</b><span>Automated tests, lint and a container build in CI</span></div>
+  <div><b>Benchmark published, with caveats</b><span>Frame-level AUC 0.674 on UCSD Ped2, below the best research results</span></div>
+  <div><b>Runs on a CPU</b><span>No GPU, no account, nothing to install to try it</span></div>
+</div>
+
+<section id="features" class="block">
+  <p class="kicker">What you get</p>
+  <h2 class="big">A review queue, not a wall of scores.</h2>
+
+  <div class="split reveal">
+    <div class="text"><h3>Ranked by how likely they matter</h3><p class="muted">Consecutive flagged frames become segments with start and end times. Each gets a confidence label and a reason you can read, and the list is ordered so you know what to watch first. Labels are a heuristic, not a probability.</p></div>
+    <div>
+      <div class="seg"><div class="row row-between"><b>Review first: 0:09.6 to 0:10.8</b><span class="badge badge-high">high confidence</span></div><p class="muted" style="margin:var(--s2) 0">The scene looked strongly unlike the rest of this clip to the model. That can be a person or vehicle moving unusually, a crowd or lighting change, or camera movement; the model cannot say which.</p><div class="row"><span class="btn btn-sm">Watch</span><span class="btn btn-sm">Confirm incident</span><span class="btn btn-sm">False alarm</span></div></div>
+    </div>
+  </div>
+
+  <div class="split flip reveal">
+    <div class="text"><h3>One slider for the false-alarm budget</h3><p class="muted">Instead of a threshold you cannot interpret, choose how much of a clip you are willing to review. The default flags at most about 5% of frames, and only those clearly above the clip's own normal level. Segments update instantly.</p></div>
+    <div class="card slider-mock"><div class="row row-between"><b>Alert budget</b><span class="badge">5% of frames</span></div><div class="track" aria-hidden="true"><i></i><b></b></div><div class="row row-between muted" style="font-size:var(--t-xs)"><span>Fewer false alarms</span><span>Fewer missed events</span></div></div>
+  </div>
+
+  <div class="split reveal" id="example">
+    <div class="text"><h3>A report you can hand to someone</h3><p class="muted">Export JSON, CSV or Markdown, print to PDF, or share a link. Every report lists the settings, the ranked segments, the uncertainty notes and a reviewer sign-off checklist. This one was exported from the bundled sample.</p></div>
+    <pre># Incident report: cart_crossing.mp4
 
 - Duration: 0:20.0 (48 sampled frames)
 - Threshold mode: **budget** (effective score threshold 0.00151101)
@@ -103,49 +130,88 @@ footer{padding:28px 0 48px;color:var(--mute);font-size:.92rem;border-top:1px sol
 ## About this report
 
 Unsupervised conv autoencoder trained on UCSD Ped2 (frame-level AUC 0.674 on the official test set). Scores rank how unusual a frame looks; they are not verdicts.</pre>
-</section>
-
-<section aria-labelledby="who-h">
-  <h2 id="who-h">Who it is for</h2>
-  <div class="grid">
-    <div class="card"><h3>Site and facilities teams</h3><p>With one fixed camera and hours of footage to skim, to decide where to look first.</p></div>
-    <div class="card"><h3>Reviewers who need a record</h3><p>Every report lists settings, flagged segments and a sign-off checklist.</p></div>
-    <div class="card"><h3>Students and researchers</h3><p>A reproducible baseline with its benchmark numbers and limits stated openly.</p></div>
   </div>
 </section>
 
-<section aria-labelledby="lim-h">
-  <h2 id="lim-h">What it can and cannot do</h2>
-  <ul class="lim lead">
-    <li>It is unsupervised: a small autoencoder learned what a normal walkway looks like and flags frames that look different.</li>
-    <li>On its benchmark (UCSD Ped2 test set, frame-level AUC) it scores 0.674. That is better than chance and well below the best published methods, so expect missed events and false alarms.</li>
-    <li>It was trained on one scene. On other cameras, use the clip-relative mode and treat flags as a review queue, not as findings.</li>
-    <li>It cannot say what happened. A flag can be a person running, a vehicle, a lighting change or camera movement.</li>
-    <li>It scores every 5th frame of the video, so very short events can be missed.</li>
-  </ul>
-  <p class="note">Not a certified security product. Do not rely on it for safety-critical decisions.</p>
+<section id="how" class="block">
+  <p class="kicker">How it works</p>
+  <h2 class="big">Three steps, no setup.</h2>
+  <div class="grid grid-3">
+    <div class="card card-lift reveal"><span class="num" aria-hidden="true">1</span><h3>Pick or upload</h3><p class="muted">Start with a bundled sample, or drop in your own clip (mp4, avi, mov, mkv or webm, up to 30 MB).</p></div>
+    <div class="card card-lift reveal"><span class="num" aria-hidden="true">2</span><h3>Review</h3><p class="muted">Read the plain-language summary, click the timeline to jump the video, then confirm each segment or mark a false alarm.</p></div>
+    <div class="card card-lift reveal"><span class="num" aria-hidden="true">3</span><h3>Tune and export</h3><p class="muted">Adjust the budget, then export or share the report.</p></div>
+  </div>
 </section>
 
-<section id="faq" aria-labelledby="faq-h">
-  <h2 id="faq-h">FAQ</h2>
-  <details><summary>Is my video stored?</summary><p>No. The upload is scored and deleted. Only the file name and the scores are kept so you can reopen the report. History is tied to a random id in your browser, and anyone with a report link can open that report. A free host's disk can reset when it restarts.</p></details>
+<section class="block">
+  <p class="kicker">Who it is for</p>
+  <h2 class="big">People who have footage and not enough hours.</h2>
+  <div class="grid grid-3">
+    <div class="card card-lift reveal"><h3>Site and facilities teams</h3><p class="muted">With one fixed camera and hours of footage, deciding where to look first.</p></div>
+    <div class="card card-lift reveal"><h3>Reviewers who need a record</h3><p class="muted">Reports list the settings, flagged segments and a sign-off section.</p></div>
+    <div class="card card-lift reveal"><h3>Students and researchers</h3><p class="muted">A reproducible baseline whose benchmark numbers and limits are stated openly.</p></div>
+  </div>
+</section>
+
+<section class="block" aria-labelledby="lim">
+  <p class="kicker">Honest limits</p>
+  <h2 class="big" id="lim">What it can and cannot do.</h2>
+  <div class="card stack">
+    <p>It is unsupervised: a small autoencoder learned what a normal walkway looks like and flags frames that look different.</p>
+    <p>On UCSD Ped2 (frame-level AUC, test set) it scores 0.674. That beats chance and sits well below the best published methods, so expect missed events and false alarms.</p>
+    <p>It was trained on one scene. On other cameras, use the clip-relative mode and treat flags as a review queue, not findings. It scores every 5th frame, so very short events can be missed.</p>
+    <p class="banner banner-warn">Not a certified security product. Do not rely on it for safety-critical decisions.</p>
+  </div>
+</section>
+
+<section id="faq" class="block">
+  <p class="kicker">FAQ</p>
+  <h2 class="big">Questions people ask first.</h2>
+  <details><summary>Is my video stored?</summary><p>No. The upload is scored and deleted. Only the file name and scores are kept so you can reopen the report. History is tied to a random id in your browser, and anyone with a report link can open that report. A free host's disk can reset when it restarts.</p></details>
   <details><summary>Which videos work best?</summary><p>Fixed cameras with a mostly consistent scene. Moving cameras and big lighting changes look unusual to the model and will be flagged.</p></details>
-  <details><summary>What do the modes mean?</summary><p>The default compares each moment with the rest of the same clip and flags only the strongest few, so false alarms stay bounded. The Ped2 mode uses a fixed threshold tuned on one benchmark scene and is only meaningful there.</p></details>
-  <details><summary>How were the numbers measured?</summary><p>The benchmark, protocol and what was and was not re-verified are written up in the <a href="https://github.com/Professional50coder/incident-intel#benchmark-what-was-measured">README</a>. The market and prior-art notes are in the <a href="https://github.com/Professional50coder/incident-intel/blob/main/docs/market-research.md">docs</a>.</p></details>
-  <details><summary>Is there an API?</summary><p>Yes. See the <a href="/docs">interactive API docs</a>.</p></details>
+  <details><summary>What do the two modes mean?</summary><p>The default compares each moment with the rest of the same clip and flags only the strongest few. The Ped2 mode uses a fixed threshold tuned on one benchmark scene and is only meaningful there.</p></details>
+  <details><summary>How were the numbers measured?</summary><p>The protocol, and what was and was not re-verified, is written up in the <a href="https://github.com/Professional50coder/incident-intel#benchmark-what-was-measured">README</a>. Prior-art notes are in the <a href="https://github.com/Professional50coder/incident-intel/blob/main/docs/market-research.md">docs</a>.</p></details>
+  <details><summary>Is there an API?</summary><p>Yes, see the <a href="/docs">interactive API docs</a>.</p></details>
 </section>
 
-<section style="text-align:center">
-  <a class="cta" href="/app">Try a sample</a>
-</section>
+<section class="cta-final reveal"><h2>See it on a real clip in <span class="serif-i">ten seconds.</span></h2><a class="btn btn-primary" href="/app">Try a sample</a></section>
 </main>
-<footer>
-  <a href="https://github.com/Professional50coder/incident-intel">Source on GitHub</a> &middot; <a href="https://github.com/Professional50coder/incident-intel/tree/main/docs">Docs</a> &middot; <a href="/docs">API</a> &middot; MIT licence
+
+<footer class="container">
+  <div class="row"><span>Incident Intelligence &middot; MIT licence</span><span><a href="https://github.com/Professional50coder/incident-intel">GitHub</a> &middot; <a href="https://github.com/Professional50coder/incident-intel/tree/main/docs">Docs</a> &middot; <a href="/docs">API</a></span></div>
 </footer>
-</div>
+
 <script>
-// Old share links looked like /#/r/<id>; send them to the app.
 if (/^#\/r\/[\w-]+$/.test(location.hash)) location.replace("/app" + location.hash);
+(function () {
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("ii_theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("theme").onclick = () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme:dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("ii_theme", root.dataset.theme); } catch (e) {}
+  };
+})();
+// real data (scores x1000) from the bundled cart_crossing sample
+const D = {"t": [0.0, 0.42, 0.83, 1.25, 1.67, 2.08, 2.5, 2.92, 3.33, 3.75, 4.17, 4.58, 5.0, 5.42, 5.83, 6.25, 6.67, 7.08, 7.5, 7.92, 8.33, 8.75, 9.17, 9.58, 10.0, 10.42, 10.83, 11.25, 11.67, 12.08, 12.5, 12.92, 13.33, 13.75, 14.17, 14.58, 15.0, 15.42, 15.83, 16.25, 16.67, 17.08, 17.5, 17.92, 18.33, 18.75, 19.17, 19.58], "s": [0.6019, 0.5816, 0.5401, 0.5458, 0.5216, 0.5961, 0.5923, 0.6097, 0.5344, 0.5966, 0.6039, 0.5908, 0.577, 0.5874, 0.5991, 0.5929, 0.5901, 0.5891, 0.6222, 0.6251, 0.5212, 0.5357, 1.0055, 1.6075, 1.6689, 1.6922, 1.3318, 0.5771, 0.5817, 0.5849, 0.5972, 0.5906, 0.5768, 0.5623, 0.5353, 0.5742, 0.6253, 0.6857, 0.6463, 0.5564, 0.5226, 0.5248, 0.5066, 0.6201, 0.6268, 0.613, 0.6409, 0.5915], "thr": 1.511, "dur": 20.0, "seg": [[9.6, 10.8, 25.7, "high"]]};
+(function () {
+  const svg = document.getElementById("hero-chart"), W = 900, H = 200, L = 8, B = 22, T = 8;
+  const tmax = D.dur, smax = Math.max(...D.s) * 1.1;
+  const X = t => L + t / tmax * (W - L - 8), Y = s => T + (1 - s / smax) * (H - T - B);
+  let h = "";
+  D.seg.forEach(g => { h += '<rect x="' + X(g[0]) + '" y="' + T + '" width="' + (X(g[1]) - X(g[0])) + '" height="' + (H - T - B) + '" fill="var(--flag)" opacity=".16"/>'; });
+  h += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(D.thr) + '" y2="' + Y(D.thr) + '" stroke="var(--flag)" stroke-dasharray="5 4"/>';
+  h += '<polyline fill="none" stroke="var(--brand)" stroke-width="2.4" stroke-linejoin="round" points="' + D.t.map((t, i) => X(t).toFixed(1) + "," + Y(D.s[i]).toFixed(1)).join(" ") + '"/>';
+  D.t.forEach((t, i) => { if (D.s[i] >= D.thr) h += '<circle cx="' + X(t) + '" cy="' + Y(D.s[i]) + '" r="4.5" fill="var(--flag)"/>'; });
+  [0, 5, 10, 15, 20].forEach(t => { h += '<text x="' + X(t) + '" y="' + (H - 4) + '" font-size="14" text-anchor="' + (t === 0 ? "start" : t === 20 ? "end" : "middle") + '" fill="var(--ink-2)">0:' + String(t).padStart(2, "0") + "</text>"; });
+  svg.innerHTML = h;
+})();
+(function () {
+  const els = document.querySelectorAll(".reveal");
+  if (!("IntersectionObserver" in window)) { els.forEach(e => e.classList.add("in")); return; }
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
+  els.forEach(e => io.observe(e));
+})();
 </script>
 </body>
 </html>
