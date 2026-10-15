@@ -18,7 +18,12 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 
 COPY src ./src
 COPY checkpoints ./checkpoints
+COPY samples ./samples
 RUN pip install --no-cache-dir -e .
 
-EXPOSE 8000
-CMD ["uvicorn", "incident_intel.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run as a non-root user with a writable data dir (Hugging Face Spaces runs containers as uid 1000).
+RUN useradd -m -u 1000 app && mkdir -p /app/data && chown -R app /app
+USER app
+ENV INCIDENT_DB=/app/data/incident_intel.db     SAMPLES_DIR=/app/samples     PORT=7860
+EXPOSE 7860
+CMD ["sh", "-c", "uvicorn incident_intel.api.main:app --host 0.0.0.0 --port ${PORT}"]

@@ -18,10 +18,26 @@ jobs:
         run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements.txt ruff
           pip install -e .
+      - name: Lint
+        run: ruff check .
       - name: Run tests
         run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t incident-intel .
+      - name: Smoke test the container
+        run: |
+          docker run -d --name ii -p 7860:7860 incident-intel
+          for i in $(seq 1 30); do curl -sf localhost:7860/health && break || sleep 2; done
+          curl -sf localhost:7860/ | grep -q "Incident Intelligence"
+          id=$(curl -sf -X POST localhost:7860/samples/cart_crossing/analyze | python3 -c "import sys,json;print(json.load(sys.stdin)['incident_id'])")
+          curl -sf "localhost:7860/incidents/$id/report?format=md" | grep -q "Segment 1"
 
   dashboard:
     runs-on: ubuntu-latest
