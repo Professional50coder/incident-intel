@@ -59,6 +59,7 @@ footer{color:var(--mute);font-size:.85rem;margin:24px 0}
 
 <section class="card noprint" id="start">
   <h2>Start here: pick a sample clip</h2>
+  <div id="error" class="banner err" role="alert" hidden></div>
   <div class="samples" id="samples"><p class="lead">Loading samples...</p></div>
   <p style="margin:14px 0 6px"><b>Or upload your own video</b> <span class="lead" id="limits"></span></p>
   <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a video file to upload">
@@ -66,7 +67,6 @@ footer{color:var(--mute);font-size:.85rem;margin:24px 0}
     <input type="file" id="file" accept="video/*,.mp4,.avi,.mov,.mkv,.webm" hidden>
   </div>
   <div class="banner warn" style="margin-top:12px">Privacy: only scores and the file name are stored, not the video. Results are listed only in this browser, but anyone with a report link can open that report.</div>
-  <div id="error" class="banner err" role="alert" hidden></div>
   <p id="busy" class="lead" hidden>Analysing... a longer clip can take a few seconds.</p>
 </section>
 
@@ -87,6 +87,7 @@ footer{color:var(--mute);font-size:.85rem;margin:24px 0}
     <div id="trunc" class="banner warn" hidden>Only the first part of this video was analysed (length limit).</div>
     <div class="kpis" id="kpis"></div>
     <video id="player" controls preload="metadata" hidden></video>
+    <p id="novideo" class="lead" hidden>The video preview is only available in the session where you uploaded the clip. Use the timestamps below to find the moments in your own copy.</p>
     <h2 style="margin-top:14px">Anomaly timeline</h2>
     <svg id="chart" viewBox="0 0 900 220" role="img" aria-label="Anomaly score over time; flagged moments are listed in the segments section below"></svg>
     <p class="lead" style="margin:4px 0">Higher = less like the rest of the footage. Red marks are flagged moments; click the chart to jump the video there.</p>
@@ -131,10 +132,11 @@ try { cid = localStorage.getItem(CID_KEY) || ""; } catch (e) {}
 if (!cid) { cid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)); try { localStorage.setItem(CID_KEY, cid); } catch (e) {} }
 const H = { "X-Client-Id": cid };
 let cfg = { max_upload_mb: 30, allowed_extensions: [".mp4"], absolute_threshold: 0.00047 };
+let samplesList = [];
 let cur = null, report = null, videoUrl = null, ownedUrl = null;
 
 function fmt(s) { const m = Math.floor(s / 60); return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0"); }
-function showError(msg) { const e = $("error"); e.textContent = msg; e.hidden = !msg; }
+function showError(msg) { const e = $("error"); e.textContent = msg; e.hidden = !msg; if (msg) e.scrollIntoView({ block: "nearest" }); }
 function busy(b) { $("busy").hidden = !b; document.querySelectorAll("#start button, #drop").forEach(x => { x.disabled = b; }); }
 async function api(path, opts) {
   let r;
@@ -151,7 +153,7 @@ async function init() {
   $("limits").textContent = "(" + cfg.allowed_extensions.join(", ") + "; up to " + cfg.max_upload_mb + " MB)";
   $("file").accept = cfg.allowed_extensions.join(",");
   try {
-    const list = await (await api("/samples")).json();
+    const list = await (await api("/samples")).json(); samplesList = list;
     const box = $("samples"); box.textContent = "";
     if (!list.length) box.textContent = "No sample clips are installed on this server; upload your own below.";
     list.forEach(s => {
@@ -201,7 +203,7 @@ async function showResult(r, vUrl) {
 }
 async function openReport(id, vUrl, label) {
   showError(""); cur = id; videoUrl = vUrl;
-  try { await getReport(); render(); $("result").hidden = false; history.replaceState(null, "", "#/r/" + id); }
+  try { await getReport(); const smp = samplesList.find(x => x.filename === report.source_filename); if (!vUrl && smp) videoUrl = "/samples/" + smp.name + "/video"; render(); $("result").hidden = false; history.replaceState(null, "", "#/r/" + id); }
   catch (e) { showError("Could not open " + (label || "that report") + ": " + e.message); }
 }
 function render() {
@@ -223,6 +225,7 @@ function render() {
   });
   const v = $("player");
   if (videoUrl) { if (v.getAttribute("src") !== videoUrl) v.src = videoUrl; v.hidden = false; } else { v.hidden = true; }
+  $("novideo").hidden = !v.hidden;
   ["Json:json", "Csv:csv", "Md:md"].forEach(x => { const [n, f] = x.split(":"); $("ex" + n).href = "/incidents/" + cur + "/report?format=" + f + "&download=true&" + params(); });
   chart(); segments();
 }
@@ -258,7 +261,7 @@ function segments() {
     t.append(bd);
     const p = document.createElement("div"); p.className = "why"; p.textContent = s.explanation;
     const row = document.createElement("div"); row.className = "row noprint";
-    const j = document.createElement("button"); j.textContent = "Watch"; j.onclick = () => seek(s.start_s); j.disabled = $("player").hidden;
+    const j = document.createElement("button"); j.textContent = "Watch"; j.onclick = () => seek(s.start_s); j.disabled = $("player").hidden; if (j.disabled) j.title = "Video preview not available for this report";
     const a = document.createElement("button"); a.textContent = vd[i] === "confirmed" ? "Confirmed (click to clear)" : "Confirm incident"; a.onclick = () => setVerdict(i, vd[i] === "confirmed" ? "" : "confirmed");
     const f = document.createElement("button"); f.textContent = vd[i] === "false" ? "Marked false alarm (click to clear)" : "False alarm"; f.onclick = () => setVerdict(i, vd[i] === "false" ? "" : "false");
     row.append(j, a, f); d.append(t, p, row); box.append(d);
