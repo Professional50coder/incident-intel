@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
 import tempfile
+import threading
 import time
+import urllib.request
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
@@ -37,6 +40,18 @@ RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "20"))  # analyses
 MAX_RAW_FRAMES = int(os.environ.get("MAX_RAW_FRAMES", "6000"))  # decoded frames cap per upload
 ALLOWED_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
+ALERT_WEBHOOK_URL = os.environ.get("ALERT_WEBHOOK_URL", "")  # operator-set; Slack/Discord-style JSON
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+def _post_webhook(url: str, payload: dict) -> None:
+    """Fire-and-forget JSON POST. Failures are swallowed: an alert must never break an analysis."""
+    try:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5).read()
+    except Exception:
+        pass
+
+
 FrameScorer = Callable[[torch.Tensor], torch.Tensor]  # (batch, 1, H, W) -> (batch,) scores
 
 
@@ -66,6 +81,11 @@ class IncidentSummary(BaseModel):
     max_score: float
     is_anomalous: bool
     frame_count: int
+
+
+class FeedbackIn(BaseModel):
+    peak_time_s: float
+    verdict: str  # confirmed | false_alarm | clear
 
 
 class DashboardStats(BaseModel):
@@ -135,6 +155,17 @@ def _sample_frames_from_video(path: Path, every_nth: int = EVERY_NTH_FRAME) -> L
 def _get_connection(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS feedback (
+            incident_id TEXT NOT NULL,
+            peak_key TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (incident_id, peak_key)
+        )
+        """
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS incidents (
@@ -238,6 +269,13 @@ def create_app(
             sample_period_s=period,
             truncated=sv.truncated,
         )
+        if ALERT_WEBHOOK_URL:
+            rep = analysis.build_report(result.model_dump(), mode, threshold, budget)
+            if rep["segments"]:
+                link = f"{PUBLIC_BASE_URL}/app#/r/{result.incident_id}" if PUBLIC_BASE_URL else result.incident_id
+                text = f"{display_name}: {rep['summary']['headline']} {link}"
+                threading.Thread(target=_post_webhook, args=(ALERT_WEBHOOK_URL, {"text": text, "content": text,
+                                 "incident_id": result.incident_id, "segments": rep["segments"]}), daemon=True).start()
         conn = _get_connection(db_path)
         with conn:
             conn.execute(
@@ -256,6 +294,12 @@ def create_app(
         if row is None:
             raise HTTPException(status_code=404, detail="incident not found")
         return IncidentResult.model_validate_json(row[0])
+
+    def _feedback(incident_id: str) -> dict:
+        conn = _get_connection(db_path)
+        rows = conn.execute("SELECT peak_key, verdict FROM feedback WHERE incident_id = ?", (incident_id,)).fetchall()
+        conn.close()
+        return {k: v for k, v in rows}
 
     @app.get("/health")
     async def health() -> dict:
@@ -363,6 +407,40 @@ def create_app(
             raise HTTPException(status_code=404, detail="incident not found")
         return Response(status_code=204)
 
+    @app.put("/incidents/{incident_id}/feedback")
+    async def put_feedback(incident_id: str, body: FeedbackIn, x_client_id: Optional[str] = Header(None)) -> dict:
+        if body.verdict not in {"confirmed", "false_alarm", "clear"}:
+            raise HTTPException(status_code=422, detail="verdict must be confirmed, false_alarm or clear")
+        conn = _get_connection(db_path)
+        row = conn.execute("SELECT owner FROM incidents WHERE id = ?", (incident_id,)).fetchone()
+        if row is None:
+            conn.close()
+            raise HTTPException(status_code=404, detail="incident not found")
+        if row[0] != _clean_owner(x_client_id):
+            conn.close()
+            raise HTTPException(status_code=403, detail="only the browser that created this report can review it")
+        key = analysis.verdict_key(body.peak_time_s)
+        with conn:
+            if body.verdict == "clear":
+                conn.execute("DELETE FROM feedback WHERE incident_id = ? AND peak_key = ?", (incident_id, key))
+            else:
+                conn.execute(
+                    "INSERT OR REPLACE INTO feedback (incident_id, peak_key, verdict, updated_at) VALUES (?, ?, ?, ?)",
+                    (incident_id, key, body.verdict, datetime.now(timezone.utc).isoformat()),
+                )
+        conn.close()
+        return _feedback(incident_id)
+
+    @app.get("/incidents/{incident_id}/feedback")
+    async def get_feedback(incident_id: str, format: str = Query("json", pattern="^(json|csv)$")) -> Response:
+        _load(incident_id, "")
+        fb = _feedback(incident_id)
+        if format == "json":
+            return JSONResponse(fb)
+        lines = ["peak_time_s,verdict"] + [f"{k},{v}" for k, v in sorted(fb.items())]
+        return PlainTextResponse("\n".join(lines) + "\n", media_type="text/csv",
+                                 headers={"Content-Disposition": f'attachment; filename="feedback-{incident_id[:8]}.csv"'})
+
     @app.get("/incidents/{incident_id}/report")
     async def incident_report(
         incident_id: str,
@@ -376,7 +454,7 @@ def create_app(
         if mode not in analysis.MODES:
             raise HTTPException(status_code=422, detail=f"mode must be one of {list(analysis.MODES)}")
         result = _load(incident_id, "")
-        report = analysis.build_report(result.model_dump(), mode, threshold, budget, min_z)
+        report = analysis.build_report(result.model_dump(), mode, threshold, budget, min_z, _feedback(incident_id))
         if format == "json":
             body, media, ext = analysis.report_json(report), "application/json", "json"
         elif format == "csv":
@@ -438,6 +516,10 @@ def create_app(
     @app.get("/app", include_in_schema=False)
     async def analysis_app() -> FileResponse:
         return FileResponse(STATIC_DIR / "app.html")
+
+    @app.get("/llms.txt", include_in_schema=False)
+    async def llms() -> PlainTextResponse:
+        return PlainTextResponse((STATIC_DIR / "llms.txt").read_text(encoding="utf-8"))
 
     @app.get("/robots.txt", include_in_schema=False)
     async def robots() -> PlainTextResponse:

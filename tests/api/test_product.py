@@ -122,3 +122,51 @@ def test_report_has_ranked_segments_and_plain_summary(tmp_path):
     assert "Start with the one at" in rep["summary"]["headline"]
     assert any("unverified" in n for n in rep["summary"]["uncertainty"])
     assert "## Summary" in c.get(f"/incidents/{r['incident_id']}/report?format=md").text
+
+
+def test_feedback_roundtrip_report_and_owner_rules(tmp_path):
+    v = tmp_path / "a.mp4"
+    _video(v)
+    c = _client(tmp_path)
+    mine = {"X-Client-Id": "client-aaaaaaaa"}
+    r = c.post("/analyze?mode=budget", files={"file": ("a.mp4", v.read_bytes(), "video/mp4")}, headers=mine).json()
+    iid = r["incident_id"]
+    seg = c.get(f"/incidents/{iid}/report").json()["segments"][0]
+    assert seg["verdict"] == "pending"
+    body = {"peak_time_s": seg["peak_time_s"], "verdict": "false_alarm"}
+    assert c.put(f"/incidents/{iid}/feedback", json=body, headers={"X-Client-Id": "client-bbbbbbbb"}).status_code == 403
+    assert c.put(f"/incidents/{iid}/feedback", json={**body, "verdict": "maybe"}, headers=mine).status_code == 422
+    assert c.put("/incidents/nope/feedback", json=body, headers=mine).status_code == 404
+    assert c.put(f"/incidents/{iid}/feedback", json=body, headers=mine).status_code == 200
+    rep = c.get(f"/incidents/{iid}/report").json()
+    assert rep["segments"][0]["verdict"] == "false_alarm" and rep["review"]["false_alarm"] == 1
+    assert "false alarm" in c.get(f"/incidents/{iid}/report?format=md").text
+    assert "false_alarm" in c.get(f"/incidents/{iid}/feedback?format=csv").text
+    c.put(f"/incidents/{iid}/feedback", json={**body, "verdict": "clear"}, headers=mine)
+    assert c.get(f"/incidents/{iid}/feedback").json() == {}
+
+
+def test_webhook_fires_only_when_segments_flagged(tmp_path, monkeypatch):
+    from incident_intel.api import main
+
+    calls = []
+    monkeypatch.setattr(main, "ALERT_WEBHOOK_URL", "http://example.invalid/hook")
+    monkeypatch.setattr(main, "_post_webhook", lambda url, payload: calls.append((url, payload)))
+    c = _client(tmp_path)
+    hit, quiet = tmp_path / "a.mp4", tmp_path / "b.mp4"
+    _video(hit)
+    _video(quiet, spike_at=None)
+    c.post("/analyze?mode=budget", files={"file": ("a.mp4", hit.read_bytes(), "video/mp4")})
+    c.post("/analyze?mode=budget", files={"file": ("b.mp4", quiet.read_bytes(), "video/mp4")})
+    import time
+
+    time.sleep(0.3)
+    assert len(calls) == 1 and "segment" in calls[0][1]["text"] and calls[0][1]["segments"]
+
+
+def test_review_hint_and_llms_txt(tmp_path):
+    from incident_intel import analysis
+
+    segs = [{"verdict": "false_alarm"}, {"verdict": "false_alarm"}, {"verdict": "confirmed"}]
+    assert "Lower the alert budget" in analysis.review_stats(segs)["hint"]
+    assert "Incident Intelligence" in _client(tmp_path).get("/llms.txt").text

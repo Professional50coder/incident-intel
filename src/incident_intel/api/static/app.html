@@ -78,6 +78,7 @@ main{min-width:0}
         <a class="btn btn-sm" id="exJson" href="#">JSON</a>
         <a class="btn btn-sm" id="exCsv" href="#">CSV</a>
         <a class="btn btn-sm" id="exMd" href="#">Markdown</a>
+        <a class="btn btn-sm" id="exFb" href="#" title="Your confirm / false alarm labels as CSV">Labels CSV</a>
         <button class="btn btn-sm" id="print">Print / PDF</button>
         <button class="btn btn-sm" id="share">Copy link</button>
       </div>
@@ -212,6 +213,7 @@ function render() {
   const v = $("player");
   if (videoUrl) { if (v.getAttribute("src") !== videoUrl) v.src = videoUrl; v.hidden = false; } else { v.hidden = true; }
   $("novideo").hidden = !v.hidden;
+  $("exFb").href = "/incidents/" + cur + "/feedback?format=csv";
   ["Json:json", "Csv:csv", "Md:md"].forEach(x => { const [n, f] = x.split(":"); $("ex" + n).href = "/incidents/" + cur + "/report?format=" + f + "&download=true&" + params(); });
   chart(); segments();
 }
@@ -233,12 +235,21 @@ function chart() {
   svg.onclick = e => { const r = svg.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * W; const t = Math.max(0, Math.min(tmax, (x - L) / (W - L - 8) * tmax)); seek(t); };
 }
 function seek(t) { const v = $("player"); if (!v.hidden) { v.currentTime = t; v.scrollIntoView({ block: "nearest" }); } }
-function verdicts() { try { return JSON.parse(localStorage.getItem("ii_v_" + cur) || "{}"); } catch (e) { return {}; } }
-function setVerdict(i, val) { const v = verdicts(); v[i] = val; try { localStorage.setItem("ii_v_" + cur, JSON.stringify(v)); } catch (e) {} segments(); }
+async function setVerdict(s, val) {
+  try {
+    await api("/incidents/" + cur + "/feedback", { method: "PUT", headers: Object.assign({ "Content-Type": "application/json" }, H), body: JSON.stringify({ peak_time_s: s.peak_time_s, verdict: val }) });
+    await getReport(); render();
+  } catch (e) { showError(e.message); }
+}
 function segments() {
   const box = $("segs"); box.textContent = "";
+  const rv = report.review;
+  if (rv && (rv.confirmed || rv.false_alarm)) {
+    const p = document.createElement("p"); p.className = "muted"; p.style.fontSize = "var(--t-sm)";
+    p.textContent = "Reviewed: " + rv.confirmed + " confirmed, " + rv.false_alarm + " false alarm, " + rv.pending + " pending." + (rv.hint ? " " + rv.hint : "");
+    box.append(p);
+  }
   if (!report.segments.length) { box.textContent = "Nothing stood out at these settings. If you expected an event, raise the alert budget with the slider above, or switch to clip-relative flagging."; return; }
-  const vd = verdicts();
   [...report.segments].sort((a, b) => a.rank - b.rank).forEach(s => {
     const i = s.rank;
     const d = document.createElement("div"); d.className = "seg" + (s.rank === 1 ? " first" : "");
@@ -248,8 +259,8 @@ function segments() {
     const p = document.createElement("div"); p.className = "why"; p.textContent = s.explanation;
     const row = document.createElement("div"); row.className = "row noprint";
     const j = document.createElement("button"); j.className = "btn btn-sm"; j.textContent = "Watch"; j.onclick = () => seek(s.start_s); j.disabled = $("player").hidden; if (j.disabled) j.title = "Video preview not available for this report";
-    const a = document.createElement("button"); a.className = "btn btn-sm"; a.textContent = vd[i] === "confirmed" ? "Confirmed (click to clear)" : "Confirm incident"; a.onclick = () => setVerdict(i, vd[i] === "confirmed" ? "" : "confirmed");
-    const f = document.createElement("button"); f.className = "btn btn-sm"; f.textContent = vd[i] === "false" ? "Marked false alarm (click to clear)" : "False alarm"; f.onclick = () => setVerdict(i, vd[i] === "false" ? "" : "false");
+    const a = document.createElement("button"); a.className = "btn btn-sm"; a.textContent = s.verdict === "confirmed" ? "Confirmed (click to clear)" : "Confirm incident"; a.setAttribute("aria-pressed", String(s.verdict === "confirmed")); a.onclick = () => setVerdict(s, s.verdict === "confirmed" ? "clear" : "confirmed");
+    const f = document.createElement("button"); f.className = "btn btn-sm"; f.textContent = s.verdict === "false_alarm" ? "Marked false alarm (click to clear)" : "False alarm"; f.setAttribute("aria-pressed", String(s.verdict === "false_alarm")); f.onclick = () => setVerdict(s, s.verdict === "false_alarm" ? "clear" : "false_alarm");
     row.append(j, a, f); d.append(t, p, row); box.append(d);
   });
 }

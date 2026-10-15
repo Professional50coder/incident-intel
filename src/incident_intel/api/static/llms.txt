@@ -1,0 +1,19 @@
+# Incident Intelligence
+
+> Triage tool for fixed-camera video. Upload a clip, get per-frame anomaly scores, ranked flagged segments with plain-language reasons, and exportable reports. Open source (MIT). The model is an unsupervised autoencoder trained on UCSD Ped2 (frame-level AUC 0.674): scores rank unusual moments, they do not confirm incidents.
+
+## Use
+- Web app: /app
+- Interactive API docs (OpenAPI): /docs
+- Source and benchmark notes: https://github.com/Professional50coder/incident-intel
+
+## API summary
+- POST /analyze?mode=budget&budget=0.05 (multipart field "file": mp4, avi, mov, mkv, webm; default limit 30 MB; 20 analyses/min/address)
+- POST /samples/{name}/analyze ; GET /samples
+- GET /incidents/{id}/report?format=json|csv|md&mode=budget|absolute&budget=0.05
+- PUT /incidents/{id}/feedback {"peak_time_s": 10.4, "verdict": "confirmed|false_alarm|clear"} (creating browser only, via X-Client-Id)
+- GET /incidents/{id}/feedback?format=json|csv
+- Optional operator alerts: set ALERT_WEBHOOK_URL (Slack/Discord-style JSON) to be notified when an analysis flags segments.
+
+## Limits
+Single-scene training, 64x64 grayscale, every 5th frame. Flags are a review queue, not findings.

@@ -200,13 +200,41 @@ def summarize(segments: Sequence[dict], duration_s: float | None, warning: str |
     }
 
 
-def build_report(result: dict, mode: str, threshold: float, budget: float, min_z: float = DEFAULT_MIN_Z) -> dict:
+def verdict_key(peak_time_s: float) -> str:
+    return f"{peak_time_s:.2f}"
+
+
+def review_stats(segments: Sequence[dict]) -> dict:
+    """Counts of reviewer verdicts and a plain suggestion. The model does not learn from them;
+    the suggestion only tells the reviewer which control to move."""
+    c = sum(1 for g in segments if g.get("verdict") == "confirmed")
+    f = sum(1 for g in segments if g.get("verdict") == "false_alarm")
+    p = len(segments) - c - f
+    hint = None
+    if f >= 2 and f > c:
+        hint = "Most reviewed flags were false alarms. Lower the alert budget to cut noise."
+    elif c >= 2 and f == 0 and p == 0:
+        hint = "Every flag was confirmed. If you suspect missed events, raise the alert budget."
+    return {"confirmed": c, "false_alarm": f, "pending": p, "hint": hint}
+
+
+def build_report(
+    result: dict,
+    mode: str,
+    threshold: float,
+    budget: float,
+    min_z: float = DEFAULT_MIN_Z,
+    feedback: dict | None = None,
+) -> dict:
     scores = [fs["score"] for fs in result["frame_scores"]]
     times = [fs.get("time_s", float(fs["frame_index"])) for fs in result["frame_scores"]]
     period = result.get("sample_period_s") or (times[1] - times[0] if len(times) > 1 else 1.0)
     flags, eff = flag_frames(scores, mode, threshold, budget, min_z)
     segs = segment_events(scores, times, flags, period)
     seg_dicts = [asdict(g) for g in segs]
+    feedback = feedback or {}
+    for g in seg_dicts:
+        g["verdict"] = feedback.get(verdict_key(g["peak_time_s"]), "pending")
     warning = domain_warning(scores)
     return {
         "incident_id": result["incident_id"],
@@ -224,6 +252,7 @@ def build_report(result: dict, mode: str, threshold: float, budget: float, min_z
         },
         "flagged_frames": int(sum(flags)),
         "segments": seg_dicts,
+        "review": review_stats(seg_dicts),
         "warning": warning,
         "summary": summarize(seg_dicts, result.get("duration_s"), warning, mode),
         "frames": [
@@ -275,14 +304,14 @@ def report_markdown(report: dict) -> str:
         lines += ["No segments were flagged at these settings.", ""]
     else:
         lines += [
-            "| Review order | Start | End | Confidence | Peak score | Peak vs clip baseline |",
-            "|---|---|---|---|---|---|",
+            "| Review order | Start | End | Confidence | Peak score | Peak vs clip baseline | Reviewer verdict |",
+            "|---|---|---|---|---|---|---|",
         ]
         by_rank = sorted(report["segments"], key=lambda g: g["rank"])
         for s in by_rank:
             lines.append(
                 f"| {s['rank']} | {fmt_time(s['start_s'])} | {fmt_time(s['end_s'])} | {s['confidence']} | "
-                f"{s['peak_score']:.6g} | {s['peak_z']:.1f} sigma |"
+                f"{s['peak_score']:.6g} | {s['peak_z']:.1f} sigma | {s['verdict'].replace('_', ' ')} |"
             )
         lines.append("")
         for s in by_rank:
