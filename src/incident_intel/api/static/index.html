@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident Intelligence</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5b6573;--line:#dde1e7;--accent:#1d5fd1;--bad:#c62828;--onacc:#fff;--ok:#2e7d32;--warn:#8a5a00;--warnbg:#fff4d6}
+@media (prefers-color-scheme:dark){:root{--onacc:#0b1220;--bg:#0f1318;--card:#171c23;--ink:#e8ebf0;--mute:#9aa4b2;--line:#2a313b;--accent:#6ea0ff;--bad:#ff7b72;--ok:#6fcf7a;--warn:#f0c060;--warnbg:#3a2f12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.7rem;margin:8px 0}h2{font-size:1.1rem;margin:0 0 8px}
+.lead{color:var(--mute);max-width:60ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:16px 0}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;color:var(--mute)}.steps li::before{content:counter(s);display:inline-block;width:1.6em;height:1.6em;border-radius:50%;background:var(--accent);color:#fff;text-align:center;margin-right:8px;font-weight:600}
+.samples{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.sample{border:1px solid var(--line);border-radius:8px;padding:12px}
+.sample p{margin:4px 0 10px;color:var(--mute);font-size:.9rem}
+button,.btn{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 12px;border-radius:8px;text-decoration:none;display:inline-block}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--onacc)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,.drop:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mute)}
+.drop.over{border-color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.banner{padding:10px 12px;border-radius:8px;margin:12px 0}
+.banner.err{background:var(--warnbg);color:var(--bad);border:1px solid var(--bad)}
+.banner.warn{background:var(--warnbg);color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0}
+.kpi b{display:block;font-size:1.5rem}.kpi span{color:var(--mute);font-size:.85rem}
+video{width:100%;max-height:360px;background:#000;border-radius:8px}
+svg{width:100%;height:auto;display:block;cursor:crosshair}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-align:top;font-size:.92rem}
+.seg{border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}
+.seg .why{color:var(--mute);font-size:.9rem;margin:4px 0 8px}
+label{font-size:.9rem;color:var(--mute)}
+.hist li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.hist{list-style:none;margin:0;padding:0}
+footer{color:var(--mute);font-size:.85rem;margin:24px 0}
+[hidden]{display:none!important}
+@media print{.noprint{display:none!important}body{background:#fff;color:#000}.card{border:0}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Incident Intelligence</h1>
+  <p class="lead">Find the unusual moments in fixed-camera video. Upload a clip (or try a sample), get a score for every moment, a short list of segments worth watching, and a report you can export. Everything is unsupervised: the model learned what a normal walkway looks like, and flags what departs from it.</p>
+</header>
+
+<section class="card noprint" id="start">
+  <h2>1. Pick a sample clip or upload your own</h2>
+  <div class="samples" id="samples"><p class="lead">Loading samples...</p></div>
+  <p style="margin:14px 0 6px"><b>Or upload a video</b> <span class="lead" id="limits"></span></p>
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a video file to upload">
+    Drop a video here or <u>choose a file</u>
+    <input type="file" id="file" accept="video/*,.mp4,.avi,.mov,.mkv,.webm" hidden>
+  </div>
+  <div class="banner warn" style="margin-top:12px">Privacy: only scores and the file name are stored, not the video. Results are listed only in this browser, but anyone with a report link can open that report.</div>
+  <div id="error" class="banner err" role="alert" hidden></div>
+  <p id="busy" class="lead" hidden>Analysing... a longer clip can take a few seconds.</p>
+</section>
+
+<section id="result" hidden>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="title" style="margin:0">Result</h2>
+      <div class="row noprint">
+        <a class="btn" id="exJson" href="#">JSON</a>
+        <a class="btn" id="exCsv" href="#">CSV</a>
+        <a class="btn" id="exMd" href="#">Markdown</a>
+        <button id="print">Print / save PDF</button>
+        <button id="share">Copy report link</button>
+      </div>
+    </div>
+    <div id="warn" class="banner warn" hidden></div>
+    <div id="trunc" class="banner warn" hidden>Only the first part of this video was analysed (length limit).</div>
+    <div class="kpis" id="kpis"></div>
+    <video id="player" controls preload="metadata" hidden></video>
+    <h2 style="margin-top:14px">Anomaly timeline</h2>
+    <svg id="chart" viewBox="0 0 900 220" role="img" aria-label="Anomaly score over time"></svg>
+    <p class="lead" style="margin:4px 0">Higher = less like the rest of the footage. Red marks are flagged moments; click the chart to jump the video there.</p>
+    <div class="row noprint" style="margin-top:10px">
+      <label>Flagging
+        <select id="mode">
+          <option value="budget">Relative to this clip (any scene)</option>
+          <option value="absolute">Ped2 calibrated threshold (UCSD Ped2 scene only)</option>
+        </select></label>
+      <label id="budgetWrap">Alert budget <b id="budgetVal"></b>
+        <input type="range" id="budget" min="1" max="20" step="1" value="5"></label>
+    </div>
+    <p class="lead" id="modeHelp"></p>
+  </div>
+  <div class="card">
+    <h2>Flagged segments to review</h2>
+    <div id="segs"></div>
+  </div>
+</section>
+
+<section class="card noprint">
+  <h2>Your recent reports</h2>
+  <ul class="hist" id="hist"><li class="lead">Nothing yet. Analyse a sample to get started.</li></ul>
+</section>
+
+<section class="card">
+  <h2>What this can and cannot do</h2>
+  <ul class="lead">
+    <li>The model is a small autoencoder trained on one scene (UCSD Ped2 walkway). Its frame-level AUC on the Ped2 test set is 0.674: it ranks unusual frames better than chance, but misses and false alarms are common.</li>
+    <li>It looks at single frames at 64x64 grayscale, every 5th frame. It cannot tell a cart from a lighting change; it only says "this moment looks unlike the rest".</li>
+    <li>On other scenes, use clip-relative flagging and treat flags as a review queue, not as confirmed incidents.</li>
+  </ul>
+</section>
+<footer>Sample clips are synthetic. <a href="/docs">API docs</a> &middot; <a href="https://github.com/Professional50coder/incident-intel">Source and benchmark details</a></footer>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const CID_KEY = "ii_client_id";
+let cid = "";
+try { cid = localStorage.getItem(CID_KEY) || ""; } catch (e) {}
+if (!cid) { cid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)); try { localStorage.setItem(CID_KEY, cid); } catch (e) {} }
+const H = { "X-Client-Id": cid };
+let cfg = { max_upload_mb: 30, allowed_extensions: [".mp4"], absolute_threshold: 0.00047 };
+let cur = null, report = null, videoUrl = null, ownedUrl = null;
+
+function fmt(s) { const m = Math.floor(s / 60); return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0"); }
+function showError(msg) { const e = $("error"); e.textContent = msg; e.hidden = !msg; }
+function busy(b) { $("busy").hidden = !b; document.querySelectorAll("#start button, #drop").forEach(x => { x.disabled = b; }); }
+async function api(path, opts) {
+  let r;
+  try { r = await fetch(path, opts); } catch (e) { throw new Error("Cannot reach the server. Check your connection and try again."); }
+  if (!r.ok) { let d = ""; try { d = (await r.json()).detail; } catch (e) {} throw new Error(typeof d === "string" && d ? d : "Request failed (" + r.status + ")."); }
+  return r;
+}
+function params() {
+  const mode = $("mode").value, b = Number($("budget").value) / 100;
+  return "mode=" + mode + "&budget=" + b + "&threshold=" + cfg.absolute_threshold;
+}
+async function init() {
+  try { cfg = await (await api("/config")).json(); } catch (e) { showError(e.message); }
+  $("limits").textContent = "(" + cfg.allowed_extensions.join(", ") + "; up to " + cfg.max_upload_mb + " MB)";
+  $("file").accept = cfg.allowed_extensions.join(",");
+  try {
+    const list = await (await api("/samples")).json();
+    const box = $("samples"); box.textContent = "";
+    if (!list.length) box.textContent = "No sample clips are installed on this server; upload your own below.";
+    list.forEach(s => {
+      const d = document.createElement("div"); d.className = "sample";
+      const t = document.createElement("b"); t.textContent = s.name.replace(/_/g, " ");
+      const p = document.createElement("p"); p.textContent = s.description;
+      const b = document.createElement("button"); b.className = "primary"; b.textContent = "Analyse this clip";
+      b.onclick = () => runSample(s);
+      d.append(t, p, b); box.append(d);
+    });
+  } catch (e) { $("samples").textContent = "Could not load samples: " + e.message; }
+  await loadHistory();
+  const m = location.hash.match(/^#\/r\/([\w-]+)$/);
+  if (m) openReport(m[1], null, "shared report");
+}
+async function runSample(s) {
+  showError(""); busy(true);
+  try {
+    const r = await (await api("/samples/" + s.name + "/analyze?" + params(), { method: "POST", headers: H })).json();
+    await showResult(r, "/samples/" + s.name + "/video", false);
+  } catch (e) { showError(e.message); } finally { busy(false); }
+}
+async function runUpload(f) {
+  showError("");
+  const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
+  if (!cfg.allowed_extensions.includes(ext)) return showError("Unsupported file type. Use one of: " + cfg.allowed_extensions.join(", "));
+  if (f.size > cfg.max_upload_mb * 1048576) return showError("That file is larger than " + cfg.max_upload_mb + " MB. Trim or compress it and try again.");
+  if (!f.size) return showError("That file is empty.");
+  busy(true);
+  try {
+    const fd = new FormData(); fd.append("file", f);
+    const r = await (await api("/analyze?" + params(), { method: "POST", headers: H, body: fd })).json();
+    if (ownedUrl) URL.revokeObjectURL(ownedUrl);
+    ownedUrl = URL.createObjectURL(f);
+    await showResult(r, ownedUrl, false);
+  } catch (e) { showError(e.message); } finally { busy(false); }
+}
+async function getReport() {
+  const r = await api("/incidents/" + cur + "/report?format=json&" + params());
+  report = await r.json();
+}
+async function showResult(r, vUrl) {
+  cur = r.incident_id; videoUrl = vUrl;
+  history.replaceState(null, "", "#/r/" + cur);
+  await getReport(); render(); loadHistory();
+  $("result").hidden = false; $("result").scrollIntoView({ behavior: "smooth" });
+}
+async function openReport(id, vUrl, label) {
+  showError(""); cur = id; videoUrl = vUrl;
+  try { await getReport(); render(); $("result").hidden = false; history.replaceState(null, "", "#/r/" + id); }
+  catch (e) { showError("Could not open " + (label || "that report") + ": " + e.message); }
+}
+function render() {
+  const R = report, st = R.settings;
+  $("title").textContent = R.source_filename;
+  $("mode").value = st.mode; $("budget").value = Math.round(st.budget * 100); $("budgetVal").textContent = Math.round(st.budget * 100) + "% of frames";
+  $("budgetWrap").hidden = st.mode !== "budget";
+  $("modeHelp").textContent = st.mode === "budget"
+    ? "Flags at most about " + Math.round(st.budget * 100) + "% of this clip's frames, and only moments clearly above its own normal level. Use the slider to trade missed events for fewer false alarms."
+    : "Flags every frame above " + cfg.absolute_threshold + ", the point picked on the Ped2 test set. Only trustworthy for the Ped2 walkway; on other scenes it tends to flag nearly everything.";
+  const w = $("warn"); w.textContent = R.warning || ""; w.hidden = !R.warning;
+  $("trunc").hidden = !R.truncated;
+  const k = $("kpis"); k.textContent = "";
+  [[R.segments.length, "segments flagged"], [R.flagged_frames + " / " + R.sampled_frames, "frames flagged"], [R.duration_s ? fmt(R.duration_s) : "?", "clip length"],
+   [Math.max(...R.frames.map(f => f.z)).toFixed(1), "peak vs normal (sigma)"]].forEach(([v, l]) => {
+    const d = document.createElement("div"); d.className = "card kpi"; d.style.margin = "0";
+    const b = document.createElement("b"); b.textContent = v; const s = document.createElement("span"); s.textContent = l; d.append(b, s); k.append(d);
+  });
+  const v = $("player");
+  if (videoUrl) { if (v.getAttribute("src") !== videoUrl) v.src = videoUrl; v.hidden = false; } else { v.hidden = true; }
+  ["Json:json", "Csv:csv", "Md:md"].forEach(x => { const [n, f] = x.split(":"); $("ex" + n).href = "/incidents/" + cur + "/report?format=" + f + "&download=true&" + params(); });
+  chart(); segments();
+}
+function chart() {
+  const F = report.frames, svg = $("chart"), W = 900, Ht = 220, L = 50, B = 24, T = 8;
+  const tmax = Math.max(report.duration_s || 0, F[F.length - 1].time_s) || 1;
+  const smax = Math.max(...F.map(f => f.score)) * 1.1 || 1;
+  const X = t => L + (t / tmax) * (W - L - 8), Y = s => T + (1 - s / smax) * (Ht - T - B);
+  let h = "";
+  report.segments.forEach(s => { h += '<rect x="' + X(s.start_s) + '" y="' + T + '" width="' + Math.max(3, X(s.end_s) - X(s.start_s)) + '" height="' + (Ht - T - B) + '" fill="#c62828" opacity=".18"/>'; });
+  h += '<line x1="' + L + '" y1="' + (Ht - B) + '" x2="' + W + '" y2="' + (Ht - B) + '" stroke="currentColor" opacity=".3"/>';
+  const eff = report.settings.effective_threshold;
+  if (eff < smax) h += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(eff) + '" y2="' + Y(eff) + '" stroke="#c62828" stroke-dasharray="5 4"/><text x="' + (L + 4) + '" y="' + (Y(eff) - 4) + '" font-size="11" fill="#c62828">flag threshold</text>';
+  h += '<polyline fill="none" stroke="#1d5fd1" stroke-width="1.6" points="' + F.map(f => X(f.time_s).toFixed(1) + "," + Y(f.score).toFixed(1)).join(" ") + '"/>';
+  F.forEach(f => { if (f.flagged) h += '<circle cx="' + X(f.time_s) + '" cy="' + Y(f.score) + '" r="3.5" fill="#c62828"/>'; });
+  const n = 6; for (let i = 0; i <= n; i++) { const t = tmax * i / n; h += '<text x="' + X(t) + '" y="' + (Ht - 6) + '" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">' + fmt(t) + "</text>"; }
+  h += '<text x="4" y="' + (T + 10) + '" font-size="11" fill="currentColor" opacity=".7">' + smax.toExponential(1) + "</text>";
+  svg.innerHTML = h;
+  svg.onclick = e => { const r = svg.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width * W; const t = Math.max(0, Math.min(tmax, (x - L) / (W - L - 8) * tmax)); seek(t); };
+}
+function seek(t) { const v = $("player"); if (!v.hidden) { v.currentTime = t; v.scrollIntoView({ block: "nearest" }); } }
+function verdicts() { try { return JSON.parse(localStorage.getItem("ii_v_" + cur) || "{}"); } catch (e) { return {}; } }
+function setVerdict(i, val) { const v = verdicts(); v[i] = val; try { localStorage.setItem("ii_v_" + cur, JSON.stringify(v)); } catch (e) {} segments(); }
+function segments() {
+  const box = $("segs"); box.textContent = "";
+  if (!report.segments.length) { box.textContent = "Nothing stood out at these settings. If you expected an event, raise the alert budget with the slider above."; return; }
+  const vd = verdicts();
+  report.segments.forEach((s, i) => {
+    const d = document.createElement("div"); d.className = "seg";
+    const t = document.createElement("b"); t.textContent = "Segment " + (i + 1) + ": " + fmt(s.start_s) + " to " + fmt(s.end_s) + "  (peak " + s.peak_z.toFixed(1) + " sigma above this clip's normal)";
+    const p = document.createElement("div"); p.className = "why"; p.textContent = s.explanation;
+    const row = document.createElement("div"); row.className = "row noprint";
+    const j = document.createElement("button"); j.textContent = "Watch"; j.onclick = () => seek(s.start_s); j.disabled = $("player").hidden;
+    const a = document.createElement("button"); a.textContent = vd[i] === "confirmed" ? "Confirmed (click to clear)" : "Confirm incident"; a.onclick = () => setVerdict(i, vd[i] === "confirmed" ? "" : "confirmed");
+    const f = document.createElement("button"); f.textContent = vd[i] === "false" ? "Marked false alarm (click to clear)" : "False alarm"; f.onclick = () => setVerdict(i, vd[i] === "false" ? "" : "false");
+    row.append(j, a, f); d.append(t, p, row); box.append(d);
+  });
+}
+async function loadHistory() {
+  const ul = $("hist");
+  try {
+    const list = await (await api("/incidents?limit=20", { headers: H })).json();
+    if (!list.length) { ul.innerHTML = '<li class="lead">Nothing yet. Analyse a sample to get started.</li>'; return; }
+    ul.textContent = "";
+    list.forEach(i => {
+      const li = document.createElement("li");
+      const a = document.createElement("a"); a.href = "#/r/" + i.incident_id; a.textContent = i.source_filename + "  (" + new Date(i.created_at).toLocaleString() + ")";
+      a.onclick = ev => { ev.preventDefault(); openReport(i.incident_id, null, "that report"); };
+      const x = document.createElement("button"); x.textContent = "Delete"; x.setAttribute("aria-label", "Delete report " + i.source_filename);
+      x.onclick = async () => { try { await api("/incidents/" + i.incident_id, { method: "DELETE", headers: H }); if (cur === i.incident_id) { $("result").hidden = true; history.replaceState(null, "", "#"); } loadHistory(); } catch (e) { showError(e.message); } };
+      li.append(a, x); ul.append(li);
+    });
+  } catch (e) { ul.innerHTML = ""; ul.textContent = "Could not load history: " + e.message; }
+}
+let tm;
+function reflag() { clearTimeout(tm); tm = setTimeout(async () => { if (!cur) return; try { await getReport(); render(); } catch (e) { showError(e.message); } }, 150); }
+$("mode").onchange = reflag;
+$("budget").oninput = () => { $("budgetVal").textContent = $("budget").value + "% of frames"; reflag(); };
+$("print").onclick = () => window.print();
+$("share").onclick = async () => { const u = location.origin + "/#/r/" + cur; try { await navigator.clipboard.writeText(u); $("share").textContent = "Link copied"; } catch (e) { prompt("Copy this link", u); } };
+const drop = $("drop");
+drop.onclick = () => $("file").click();
+drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } };
+$("file").onchange = e => { if (e.target.files[0]) runUpload(e.target.files[0]); e.target.value = ""; };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) runUpload(e.dataTransfer.files[0]); };
+init();
+</script>
+</body>
+</html>

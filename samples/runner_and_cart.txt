@@ -1,0 +1,1 @@
+Synthetic: a small fast runner at about 0:06-0:08 (easy for the model to miss) and a cart at about 0:16-0:18.

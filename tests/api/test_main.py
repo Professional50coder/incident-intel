@@ -89,7 +89,7 @@ def test_list_incidents_returns_most_recent_first(tmp_path: Path) -> None:
     body = response.json()
     assert len(body) == 3
     assert [item["incident_id"] for item in body] == list(reversed(ids))
-    assert body[0]["is_anomalous"] is True  # score 0.03 > ANOMALY_THRESHOLD 0.02
+    assert body[0]["is_anomalous"] is True  # score 0.03 > ANOMALY_THRESHOLD
 
 
 def test_stats_are_empty_with_no_incidents(tmp_path: Path) -> None:
