@@ -147,15 +147,15 @@ The hosted app above is the primary UI. The original Next.js dashboard below sti
 ```mermaid
 flowchart TD
     U[Video upload] --> D[Next.js + Three.js dashboard]
-    D - "POST /analyze" --> A[FastAPI backend]
+    D -->|"POST /analyze"| A[FastAPI backend]
     A --> S["Frame sampling<br/>OpenCV, every 5th frame, 64x64 grayscale"]
     S --> M["Anomaly scorer<br/>trained conv autoencoder, reconstruction error"]
     M --> T{"score > 0.00047?"}
     T --> DB[("SQLite<br/>data/incident_intel.db")]
-    D - "GET /incidents, /incidents/{id}, /stats<br/>polled every 5s" --> A
+    D -->|"GET /incidents, /incidents/{id}, /stats<br/>polled every 5s"| A
     A --> DB
 
-    subgraph Offline [Offline: model selection]
+    subgraph Offline ["Offline: model selection"]
       R[UCSD Ped2 raw frames] --> MF["Manifest<br/>data/manifests/ucsdped2-v1.json"]
       MF --> E["phase1_model_selection.py<br/>frame-diff, embedding k-NN, autoencoder"]
       E --> RJ["runs/*.json"]
